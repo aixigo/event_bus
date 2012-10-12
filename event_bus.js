@@ -12,115 +12,98 @@
 //  http://www.aixigo.de
 //  Aachen, Germany
 //
-define(
-   [ 'underscore', './event' ],
+'use strict';
+
+define( [ 'underscore' ], function( _ ) {
+
+   var Q_
+     , nextTick_;
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function( _, Event )
-   {
-      "use strict";
+   function EventBus() {
+      this.eventQueue_ = [];
+      this.subscribers_ = [];
+   };
 
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      function EventBus()
-      {
-         EventBus.prototype.singleton_ = this;
-
-         this.queue_ = [];
-         this.subscribers = {};
+   EventBus.prototype.publish = function( eventName, optionalData ) {
+      if( !_.isString( eventName ) ) {
+         throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
 
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      EventBus.prototype.singleton()
-      {
-         if( _.isUndefined( EventBus.prototype.singleton_ ) ) {
-            EventBus.prototype.singleton_ = new EventBus();
-         }
-
-         return EventBus.prototype.singleton_;
-      }
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      EventBus.prototype.subscribe = function( subscriberId, callback )
-      {
-         subscribers[ subscriberId ] = { 'sendEvent': callback };
-      }
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      EventBus.prototype.unsubscribe = function( subscriberId )
-      {
-         delete this.subscribers[ subscriberId ];
-      }
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      EventBus.prototype.publish = function()
-      {
-         // Create a batch from the currently queued events as the queue might get modified during event
-         // processing
-         var batch = this.queue_;
-         this.queue_ = [];
-
-         // Send batch to all subscribers
-         _each( batch, function( event ){
-            _.each( this.subscribers, function( subscriber, subscriberId ) {
-               subscriber.sendEvent( event );
-            } );
-         } );
-      }
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      EventBus.prototype.pushEvent = function( name, subject, payload )
-      {
-         this.queue_.push( Event.create( name, subject, payload ) );
-      }
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      return {
-         /**
-          * Adds an event to the event queue.
-          *
-          * @param name    The event name.
-          * @param subject The event subject.
-          * @param payload The event payload, if any.
-          */
-         'push': function( name, subject, payload ) {
-            EventBus.singleton().pushEvent( name, subject, payload );
-         },
-
-         /**
-          * Subscribes to this event bus. Subscribers will receive ALL events on the bus, i.e. they themselves
-          * are responsible for selecting the one they are interested in.
-          *
-          * @param subscriberId The subscriber's identifier.
-          * @param callback     The callback method. It takes an event as its only parameter.
-          */
-         'subscribe': function( subscriberId, callback ) {
-            EventBus.singleton().subscribe( subscriberId, callback );
-         },
-
-         /**
-          * Removes a subscriber's callback from the list of subscribers.
-          *
-          * @param subscriberId The subscriber's identifier.
-          */
-         'unsubscribe': function( subscriberId ) {
-            EventBus.singleton().unsubscribe( subscriberId );
-         },
-
-         /**
-          * Publishes all events currently on the bus (i.e. sends them to all subscribers) and removes them
-          * from the queue.
-          */
-         'publish': function() {
-            EventBus.singleton().publish();
-         }
+      var eventItem = {
+         'eventName': eventName,
+         'calledDeferred': Q_.defer()
       };
+
+      if( this.eventQueue_.length === 0 ) {
+         nextTick_( _.bind( this.processQueue_, this ) );
+      }
+      this.eventQueue_.push( eventItem );
+
+      return eventItem.calledDeferred.promise;
+   };
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   EventBus.prototype.subscribe = function( eventName, subscriber ) {
+      if( !_.isString( eventName ) ) {
+         throw new Error( 'Expected eventName to be a String but got ' + eventName );
+      }
+      if( !_.isFunction( subscriber ) ) {
+         throw new Error( 'Expected listener to be a function but got ' + subscriber );
+      }
+
+      this.subscribers_.push( {
+         'eventName': eventName,
+         'subscriber': subscriber
+      } );
+   };
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   EventBus.prototype.processQueue_ = function() {
+      var queuedEvents = this.eventQueue_;
+      var subscribers = this.subscribers_;
+      this.eventQueue_  = [];
+
+      _.each( queuedEvents, function( eventItem ) {
+
+         var eventName = eventItem.eventName;
+         _.each( subscribers, function( subscriberItem ) {
+
+            if( subscriberItem.eventName === eventName ) {
+               subscriberItem.subscriber();
+            }
+
+         } );
+      } );
+
+   };
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   return {
+
+      create: function() {
+         if( !Q_ ) {
+            throw new Error( 'Need a promise implementation like Q' );
+         }
+         if( !nextTick_ ) {
+            throw new Error( 'Need a next tick implementation like $timeout' );
+         }
+         return new EventBus();
+      },
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      init: function( Q, nextTick ) {
+         Q_ = Q;
+         nextTick_ = nextTick;
+      }
+
    }
-);
+
+} );

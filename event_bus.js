@@ -26,6 +26,7 @@ define( [ 'underscore' ], function( _ ) {
    function EventBus() {
       this.eventQueue_ = [];
       this.subscribers_ = [];
+      this.waitingDeferreds_ = [];
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,21 +38,22 @@ define( [ 'underscore' ], function( _ ) {
 
       var eventItem = {
          'eventName': eventName,
-         'calledDeferred': Q_.defer()
+         "publishedDeferred": Q_.defer()
       };
 
       if( this.eventQueue_.length === 0 ) {
          nextTick_( _.bind( function() {
             var subscribers = _.clone( this.subscribers_ );
             var queuedEvents = this.eventQueue_;
+
             this.eventQueue_ = [];
 
-            processQueue( queuedEvents, subscribers );
+            processWaitingDeferreds( this, processQueue( queuedEvents, subscribers ) );
          }, this ) );
       }
       this.eventQueue_.push( eventItem );
 
-      return eventItem.calledDeferred.promise;
+      return eventItem.publishedDeferred.promise;
    };
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +75,7 @@ define( [ 'underscore' ], function( _ ) {
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
    function processQueue( queuedEvents, subscribers ) {
-      _.each( queuedEvents, function( eventItem ) {
+      return _.map( queuedEvents, function( eventItem ) {
 
          var eventName = eventItem.eventName;
          _.each( subscribers, function( subscriberItem ) {
@@ -84,7 +86,22 @@ define( [ 'underscore' ], function( _ ) {
 
          } );
 
-         eventItem.calledDeferred.resolve();
+         return eventItem.publishedDeferred;
+      } );
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function processWaitingDeferreds( eventBus, newDeferreds ) {
+      var waitingDeferreds = eventBus.waitingDeferreds_;
+      eventBus.waitingDeferreds_ = newDeferreds;
+
+      if( eventBus.eventQueue_.length === 0 && newDeferreds.length > 0 ) {
+         eventBus.publish( 'EventBus.internal.flushDeferreds' );
+      }
+
+      _.each( waitingDeferreds, function( deferred ) {
+         deferred.resolve();
       } );
    }
 
@@ -104,7 +121,7 @@ define( [ 'underscore' ], function( _ ) {
             return true;
          }
 
-         if( !isPartMatch( subscribedToParts[ i ], eventNameParts[ i ] ) ) {
+         if( !matchesPart( subscribedToParts[ i ], eventNameParts[ i ] ) ) {
             return false;
          }
       }
@@ -114,7 +131,7 @@ define( [ 'underscore' ], function( _ ) {
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function isPartMatch( subscribedPart, eventPart ) {
+   function matchesPart( subscribedPart, eventPart ) {
       if( subscribedPart === '' ) {
          return true;
       }
@@ -136,6 +153,7 @@ define( [ 'underscore' ], function( _ ) {
          if( !nextTick_ ) {
             throw new Error( 'Need a next tick implementation like $timeout' );
          }
+
          return new EventBus();
       },
 

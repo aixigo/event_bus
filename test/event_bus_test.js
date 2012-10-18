@@ -180,7 +180,7 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
             done();
          } );
 
-         this.tick_();
+         this.tickAll_();
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -195,7 +195,28 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
             done();
          } );
 
-         this.tick_();
+         this.tickAll_();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should only resolve the promise after all subscribers had the chance to publish events on their own', function( done ) {
+         var self = this;
+         this.eventBus_.subscribe( 'event', function() {
+            self.eventBus_.publish( 'subEvent' );
+
+            self.tickAsync_();
+         } );
+
+         var mySpy = sinon.spy();
+         this.eventBus_.subscribe( 'subEvent', mySpy );
+
+         this.eventBus_.publish( 'event' ).then( function() {
+            expect( mySpy.called ).toBe( true );
+            done();
+         } );
+
+         self.tick_();
       } );
 
    } );
@@ -313,10 +334,30 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
       };
 
       thisObject.tick_ = function() {
-         for( var i = 0; i < thisObject.savedNextTicks_.length; ++i ) {
-            thisObject.savedNextTicks_[ i ]();
-         }
+         var ticks = thisObject.savedNextTicks_;
          thisObject.savedNextTicks_ = [];
+         for( var i = 0; i < ticks.length; ++i ) {
+            ticks[ i ]();
+         }
+      };
+
+      thisObject.tickAsync_ = function() {
+         window.setTimeout( thisObject.tick_, 10 );
+      };
+
+      thisObject.tickAll_ = function() {
+         window.setTimeout( function() {
+            if( !thisObject.tick_ ) {
+               // test is already finished and mock removed but there's still something in the queue
+               // --> ignore it
+               return;
+            }
+
+            thisObject.tick_();
+            if( thisObject.savedNextTicks_.length > 0 ) {
+               thisObject.tickAll_();
+            }
+         }, 10 );
       };
 
       return thisObject.nextTick_;
@@ -328,6 +369,9 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
       delete thisObject.eventBus_;
       delete thisObject.nextTick_;
       delete thisObject.savedNextTicks_;
+      delete thisObject.tickAll_;
+      delete thisObject.tickAsync_;
+      delete thisObject.tick_;
    }
 
 } );

@@ -12,19 +12,17 @@
 //  http://www.aixigo.de
 //  Aachen, Germany
 //
-'use strict';
-
 define( [ 'underscore' ], function( _ ) {
+   'use strict';
 
-   var Q_
-     , nextTick_;
+   var Q_, nextTick_;
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
    function EventBus() {
       this.eventQueue_ = [];
       this.subscribers_ = [];
-   };
+   }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -39,7 +37,13 @@ define( [ 'underscore' ], function( _ ) {
       };
 
       if( this.eventQueue_.length === 0 ) {
-         nextTick_( _.bind( this.processQueue_, this ) );
+         nextTick_( _.bind( function() {
+            var subscribers = _.clone( this.subscribers_ );
+            var queuedEvents = this.eventQueue_;
+            this.eventQueue_ = [];
+
+            processQueue( queuedEvents, subscribers );
+         }, this ) );
       }
       this.eventQueue_.push( eventItem );
 
@@ -64,11 +68,7 @@ define( [ 'underscore' ], function( _ ) {
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   EventBus.prototype.processQueue_ = function() {
-      var queuedEvents = this.eventQueue_;
-      var subscribers = this.subscribers_;
-      this.eventQueue_  = [];
-
+   function processQueue( queuedEvents, subscribers ) {
       _.each( queuedEvents, function( eventItem ) {
 
          var eventName = eventItem.eventName;
@@ -79,9 +79,10 @@ define( [ 'underscore' ], function( _ ) {
             }
 
          } );
-      } );
 
-   };
+         eventItem.calledDeferred.resolve();
+      } );
+   }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,7 +90,7 @@ define( [ 'underscore' ], function( _ ) {
 
       create: function() {
          if( !Q_ ) {
-            throw new Error( 'Need a promise implementation like Q' );
+            throw new Error( 'Need a promise implementation like $q or Q' );
          }
          if( !nextTick_ ) {
             throw new Error( 'Need a next tick implementation like $timeout' );
@@ -104,6 +105,6 @@ define( [ 'underscore' ], function( _ ) {
          nextTick_ = nextTick;
       }
 
-   }
+   };
 
 } );

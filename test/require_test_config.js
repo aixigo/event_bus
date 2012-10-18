@@ -12,6 +12,8 @@
 //  http://www.aixigo.de
 //  Aachen, Germany
 //
+'use strict';
+
 var require = {
    'paths': {
       'underscore': 'underscore/underscore-1.3.3-min'

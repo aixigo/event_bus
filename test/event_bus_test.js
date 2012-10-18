@@ -13,6 +13,7 @@
 //  Aachen, Germany
 //
 'use strict';
+/*global afterEach,assert,beforeEach,buster,describe,expect,it,Q,sinon */
 
 buster.spec.expose();
 
@@ -49,21 +50,7 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
    describe( 'EventBus instances', function() {
 
       beforeEach( function() {
-         var self = this;
-         this.savedNextTicks_ = [];
-
-         this.nextTick_ = function( callback ) {
-            self.savedNextTicks_.push( callback );
-         };
-
-         this.tick_ = function() {
-            for( var i = 0; i < this.savedNextTicks_.length; ++i ) {
-               this.savedNextTicks_[ i ]();
-            }
-            this.savedNextTicks_ = [];
-         };
-
-         event_bus.init( Q, this.nextTick_ );
+         event_bus.init( Q, addTickMock( this ) );
          this.eventBus_ = event_bus.create();
       } );
 
@@ -71,9 +58,9 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
 
       afterEach( function() {
          event_bus.init( null, null );
+
          delete this.eventBus_;
-         delete this.nextTick_;
-         delete this.savedNextTicks_;
+         removeTickMock( this );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,8 +119,7 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
    describe( 'EventBus.prototype.publish', function() {
 
       beforeEach( function() {
-         this.nextTick_ = sinon.spy();
-         event_bus.init( Q, this.nextTick_ );
+         event_bus.init( Q, addTickMock( this ) );
          this.eventBus_ = event_bus.create();
       } );
 
@@ -141,7 +127,9 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
 
       afterEach( function() {
          event_bus.init( null, null );
-         this.eventBus_ = null;
+
+         delete this.eventBus_;
+         removeTickMock( this );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -172,13 +160,42 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'calls nextTick implementation once during runloop to schedule queue processing', function() {
-         expect( this.nextTick_.callCount ).toBe( 0 );
+         expect( this.savedNextTicks_.length ).toBe( 0 );
 
          this.eventBus_.publish( 'myEvent' );
-         expect( this.nextTick_.callCount ).toBe( 1 );
+         expect( this.savedNextTicks_.length ).toBe( 1 );
 
          this.eventBus_.publish( 'myEvent2' );
-         expect( this.nextTick_.callCount ).toBe( 1 );
+         expect( this.savedNextTicks_.length ).toBe( 1 );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'resolves the promise when there was no matching subscriber', function( done ) {
+         this.eventBus_.publish( 'myEvent' ).then( function() {
+            expect( true ).toBe( true );
+            done();
+         }, function() {
+            assert.fail();
+            done();
+         } );
+
+         this.tick_();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'resolves the promise when there was at least one matching subscriber', function( done ) {
+         this.eventBus_.subscribe( 'myEvent', function() {} );
+         this.eventBus_.publish( 'myEvent' ).then( function() {
+            expect( true ).toBe( true );
+            done();
+         }, function() {
+            assert.fail();
+            done();
+         } );
+
+         this.tick_();
       } );
 
    } );
@@ -188,8 +205,7 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
    describe( 'EventBus.prototype.subscribe', function() {
 
       beforeEach( function() {
-         this.nextTick_ = sinon.spy();
-         event_bus.init( Q, this.nextTick_ );
+         event_bus.init( Q, addTickMock( this ) );
          this.eventBus_ = event_bus.create();
       } );
 
@@ -197,7 +213,9 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
 
       afterEach( function() {
          event_bus.init( null, null );
-         this.eventBus_ = null;
+
+         delete this.eventBus_;
+         removeTickMock( this );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,5 +230,32 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
       } );
 
    } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function addTickMock( thisObject ) {
+      thisObject.savedNextTicks_ = [];
+
+      thisObject.nextTick_ = function( callback ) {
+         thisObject.savedNextTicks_.push( callback );
+      };
+
+      thisObject.tick_ = function() {
+         for( var i = 0; i < thisObject.savedNextTicks_.length; ++i ) {
+            thisObject.savedNextTicks_[ i ]();
+         }
+         thisObject.savedNextTicks_ = [];
+      };
+
+      return thisObject.nextTick_;
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function removeTickMock( thisObject ) {
+      delete thisObject.eventBus_;
+      delete thisObject.nextTick_;
+      delete thisObject.savedNextTicks_;
+   }
 
 } );

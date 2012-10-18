@@ -15,7 +15,11 @@
 define( [ 'underscore' ], function( _ ) {
    'use strict';
 
-   var Q_, nextTick_;
+   var Q_;
+   var nextTick_;
+   var PART_SEPARATOR = '.';
+   var SUB_PART_SEPARATOR = '-';
+
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,7 +78,7 @@ define( [ 'underscore' ], function( _ ) {
          var eventName = eventItem.eventName;
          _.each( subscribers, function( subscriberItem ) {
 
-            if( subscriberItem.eventName === eventName ) {
+            if( isValidSubscriber( subscriberItem, eventName ) ) {
                subscriberItem.subscriber();
             }
 
@@ -82,6 +86,43 @@ define( [ 'underscore' ], function( _ ) {
 
          eventItem.calledDeferred.resolve();
       } );
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function isValidSubscriber( subscriber, eventName ) {
+      var subscribedTo = subscriber.eventName;
+      if( subscribedTo === eventName ) {
+         return true;
+      }
+
+      var subscribedToParts = subscribedTo.split( PART_SEPARATOR );
+      var eventNameParts = eventName.split( PART_SEPARATOR );
+      for( var i = 0, len = eventNameParts.length; i < len; ++i ) {
+         // subscribedTo is a prefix of event name
+         if( i >= subscribedToParts.length ) {
+            return true;
+         }
+
+         if( !isPartMatch( subscribedToParts[ i ], eventNameParts[ i ] ) ) {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function isPartMatch( subscribedPart, eventPart ) {
+      if( subscribedPart === '' ) {
+         return true;
+      }
+      else if( subscribedPart === eventPart ) {
+         return true;
+      }
+
+      return ( eventPart.indexOf( subscribedPart + SUB_PART_SEPARATOR ) === 0 );
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

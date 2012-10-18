@@ -229,6 +229,78 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
          }.bind( this ) ).toThrow();
       } );
 
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'allows wildcard at the end of the event name', function() {
+         var mySpy = sinon.spy();
+         this.eventBus_.subscribe( 'firstLevel.secondLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel' );
+
+         this.tick_();
+
+         expect( mySpy.called ).toBe( true );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'allows wildcard at the beginning of the event name', function() {
+         var mySpy = sinon.spy();
+         this.eventBus_.subscribe( '.secondLevel.thirdLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel' );
+
+         this.tick_();
+
+         expect( mySpy.called ).toBe( true );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'allows wildcards anywhere in the event name', function() {
+         var mySpy = sinon.spy();
+         this.eventBus_.subscribe( 'firstLevel..thirdLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel' );
+
+         this.tick_();
+
+         expect( mySpy.called ).toBe( true );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'allows matching of inner wildcards using minus', function() {
+         var mySpy = sinon.spy();
+         this.eventBus_.subscribe( 'firstLevel.secondLevel.thirdLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel-here.secondLevel.thirdLevel' );
+
+         this.tick_();
+
+         expect( mySpy.called ).toBe( true );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'allows matching of inner wildcards using minus combined with wildcards', function() {
+         var mySpy = sinon.spy();
+         this.eventBus_.subscribe( 'firstLevel..thirdLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel-here' );
+
+         this.tick_();
+
+         expect( mySpy.called ).toBe( true );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'allows matching of inner wildcards using minus with wildcards only', function() {
+         var mySpy = sinon.spy();
+         this.eventBus_.subscribe( 'firstLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel-here' );
+
+         this.tick_();
+
+         expect( mySpy.called ).toBe( true );
+      } );
+
    } );
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

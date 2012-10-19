@@ -219,6 +219,79 @@ define( [ 'event_bus/event_bus' ], function( event_bus ) {
          self.tick_();
       } );
 
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should deliver the event object to the subscribers', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event ).toBeDefined();
+         } );
+
+         this.eventBus_.publish( 'myEvent' );
+
+         this.tick_();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should deliver an event object with certain properties', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event.name ).toBe( 'myEvent' );
+         } );
+
+         this.eventBus_.publish( 'myEvent' );
+
+         this.tick_();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should deliver data within the event object', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event.data ).toEqual( {
+               'myNumber': 12,
+               'myString': 'Hello'
+            } );
+         } );
+
+         this.eventBus_.publish( 'myEvent', {
+            'myNumber': 12,
+            'myString': 'Hello'
+         } );
+
+         this.tick_();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should deliver an empty object for missing data within the event object', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event.data ).toEqual( {} );
+         } );
+
+         this.eventBus_.publish( 'myEvent' );
+
+         this.tick_();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should prevent from manipulating data for other subscribers', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event.data ).toEqual( { 'key': 'val' } );
+            event.data.key = 'evil';
+         } );
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event.data ).toEqual( { 'key': 'val' } );
+            event.data.key = 'evil';
+         } );
+
+         this.eventBus_.publish( 'myEvent', {
+            'key': 'val'
+         } );
+
+         this.tick_();
+      } );
+
    } );
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

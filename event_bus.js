@@ -37,8 +37,9 @@ define( [ 'underscore' ], function( _ ) {
       }
 
       var eventItem = {
-         'eventName': eventName,
-         "publishedDeferred": Q_.defer()
+         'name': eventName,
+         'data': arguments.length > 1 ? optionalData : {},
+         'publishedDeferred': Q_.defer()
       };
 
       if( this.eventQueue_.length === 0 ) {
@@ -67,7 +68,7 @@ define( [ 'underscore' ], function( _ ) {
       }
 
       this.subscribers_.push( {
-         'eventName': eventName,
+         'name': eventName,
          'subscriber': subscriber
       } );
    };
@@ -77,11 +78,14 @@ define( [ 'underscore' ], function( _ ) {
    function processQueue( queuedEvents, subscribers ) {
       return _.map( queuedEvents, function( eventItem ) {
 
-         var eventName = eventItem.eventName;
+         var eventName = eventItem.name;
          _.each( subscribers, function( subscriberItem ) {
 
             if( isValidSubscriber( subscriberItem, eventName ) ) {
-               subscriberItem.subscriber();
+               subscriberItem.subscriber( {
+                  'name': eventItem.name,
+                  'data': _.clone( eventItem.data )
+               } );
             }
 
          } );
@@ -108,7 +112,7 @@ define( [ 'underscore' ], function( _ ) {
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
    function isValidSubscriber( subscriber, eventName ) {
-      var subscribedTo = subscriber.eventName;
+      var subscribedTo = subscriber.name;
       if( subscribedTo === eventName ) {
          return true;
       }

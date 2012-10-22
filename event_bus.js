@@ -76,7 +76,7 @@ define( [ 'underscore' ], function( _ ) {
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
    function processQueue( queuedEvents, subscribers ) {
-      return _.map( queuedEvents, function( eventItem ) {
+      return _.without( _.map( queuedEvents, function( eventItem ) {
 
          var eventName = eventItem.name;
          _.each( subscribers, function( subscriberItem ) {
@@ -90,8 +90,13 @@ define( [ 'underscore' ], function( _ ) {
 
          } );
 
+         // prevent from endless loop due to never ending internal flush events when processing the deferreds.
+         if( eventName === 'EventBus.internal.flushDeferreds' ) {
+            return null;
+         }
+
          return eventItem.publishedDeferred;
-      } );
+      } ), null );
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -12,18 +12,21 @@
 //  http://www.aixigo.de
 //  Aachen, Germany
 //
-'use strict';
+( function( global ) {
+   'use strict';
 
-var require = {
-   'paths': {
-      'underscore': 'underscore/underscore-1.3.3-min'
-   },
-   'shim': {
-      'underscore': {
-         'deps': [],
-         'exports': function() {
-            return this._.noConflict();
+   global.require = {
+      'paths': {
+         'underscore': 'underscore/underscore-1.3.3-min'
+      },
+      'shim': {
+         'underscore': {
+            'deps': [],
+            'exports': function() {
+               return this._.noConflict();
+            }
          }
       }
-   }
-};
+   };
+
+} )( window || this );

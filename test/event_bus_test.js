@@ -12,12 +12,12 @@
 //  http://www.aixigo.de
 //  Aachen, Germany
 //
-'use strict';
 /*global afterEach,assert,beforeEach,buster,describe,expect,it,Q,sinon */
 
 buster.spec.expose();
 
 define( [ 'event_bus/event_bus' ], function( event_bus ) {
+   'use strict';
 
    describe( 'event_bus module', function() {
 

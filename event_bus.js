@@ -20,7 +20,6 @@ define( [ 'underscore' ], function( _ ) {
    var PART_SEPARATOR = '.';
    var SUB_PART_SEPARATOR = '-';
 
-
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
    function EventBus() {
@@ -37,9 +36,9 @@ define( [ 'underscore' ], function( _ ) {
       }
 
       var eventItem = {
-         'name': eventName,
-         'data': arguments.length > 1 ? optionalData : {},
-         'publishedDeferred': Q_.defer()
+         name: eventName,
+         data: arguments.length > 1 ? optionalData : {},
+         publishedDeferred: Q_.defer()
       };
 
       if( this.eventQueue_.length === 0 ) {
@@ -68,8 +67,8 @@ define( [ 'underscore' ], function( _ ) {
       }
 
       this.subscribers_.push( {
-         'name': eventName,
-         'subscriber': subscriber
+         name: eventName,
+         subscriber: subscriber
       } );
    };
 
@@ -83,8 +82,8 @@ define( [ 'underscore' ], function( _ ) {
 
             if( isValidSubscriber( subscriberItem, eventName ) ) {
                subscriberItem.subscriber( {
-                  'name': eventItem.name,
-                  'data': _.clone( eventItem.data )
+                  name: eventItem.name,
+                  data: _.clone( eventItem.data )
                } );
             }
 

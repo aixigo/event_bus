@@ -12,29 +12,36 @@
 //  http://www.aixigo.de
 //  Aachen, Germany
 //
-var config = exports;
-var test = 'event_bus/test/';
+/*global exports */
 
-config[ 'myTests' ] = {
-   'environment': 'browser',
-   'extensions': [
-      require( 'buster-amd' ),
-      require( 'buster-sinon' )
-   ],
-   'rootPath': '../../',
-   'sources': [
-      'event_bus/event_bus.js'
-   ],
-   'libs': [
-      test + 'require_test_config.js',
+(function( config ) {
+   'use strict';
 
-      // NEEDS FIX A: how to handle libs just used as a replacement during testing?
-      test + 'test_libs/q.min.js',
+   var test = 'event_bus/test/';
 
-      'underscore/underscore-1.3.3-min.js',
-      'requirejs/require.js'
-   ],
-   'tests': [
-      test + '*_test.js'
-   ]
-};
+   config[ 'EventBus tests' ] = {
+      environment: 'browser',
+      extensions: [
+         require( 'buster-amd' ),
+         require( 'buster-sinon' )
+      ],
+      rootPath: '../../',
+      sources: [
+         'event_bus/event_bus.js'
+      ],
+      libs: [
+         test + 'require_test_config.js',
+
+         // NEEDS FIX A: how to handle libs just used as a replacement during testing?
+         test + 'test_libs/q.min.js',
+
+         'underscore/underscore-1.3.3-min.js',
+         'requirejs/require.js'
+      ],
+      tests: [
+         test + '*_test.js'
+      ]
+   };
+
+})( exports );
+

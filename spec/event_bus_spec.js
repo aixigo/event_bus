@@ -43,7 +43,6 @@ define( [ 'event_bus' ], function( event_bus ) {
 
       describe( 'instance', function() {
 
-
          beforeEach( function() {
             jasmine.Clock.useMock();
 

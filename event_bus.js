@@ -123,6 +123,10 @@ define( [ 'underscore' ], function( _ ) {
 
       var subscribedToParts = subscribedTo.split( PART_SEPARATOR );
       var eventNameParts = eventName.split( PART_SEPARATOR );
+      if( subscribedToParts.length > eventNameParts.length ) {
+         return false;
+      }
+
       for( var i = 0, len = eventNameParts.length; i < len; ++i ) {
          // subscribedTo is a prefix of event name
          if( i >= subscribedToParts.length ) {

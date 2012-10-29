@@ -265,6 +265,18 @@ define( [ 'event_bus' ], function( event_bus ) {
                jasmine.Clock.tick( 101 );
             } );
 
+            //////////////////////////////////////////////////////////////////////////////////////////////////
+
+            it( 'should not deliver an unspecific event to a more specific subscriber', function() {
+               var mySpy = jasmine.createSpy();
+               this.eventBus_.subscribe( 'firstLevel.secondLevel', mySpy );
+               this.eventBus_.publish( 'firstLevel' );
+
+               jasmine.Clock.tick( 101 );
+
+               expect( mySpy ).not.toHaveBeenCalled();
+            } );
+
          } );
 
          /////////////////////////////////////////////////////////////////////////////////////////////////////

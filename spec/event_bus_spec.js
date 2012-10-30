@@ -36,7 +36,9 @@ define( [ 'event_bus' ], function( event_bus ) {
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'throws exception if create is called without setting nextTick via init before', function() {
-         expect( event_bus.create.bind( event_bus, {} ) ).toThrow();
+         expect( function f() {
+            event_bus.create( {} );
+         } ).toThrow();
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -284,12 +286,13 @@ define( [ 'event_bus' ], function( event_bus ) {
          describe( 'subscribe', function() {
 
             it( 'throws when called without mandatory arguments', function() {
-               expect( this.eventBus_.subscribe ).toThrow();
+               var eventBus = this.eventBus_;
+               expect( eventBus.subscribe ).toThrow();
 
                // NEEDS FIX C: is there a better way to express that the second argument is also mandatory in case the first is given?
                expect( function() {
-                  this.eventBus_.subscribe( '' );
-               }.bind( this ) ).toThrow();
+                  eventBus.subscribe( '' );
+               } ).toThrow();
             } );
 
             //////////////////////////////////////////////////////////////////////////////////////////////////

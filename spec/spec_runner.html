@@ -6,6 +6,19 @@
 
    <script type="text/javascript">
       (function() {
+         var prefix = String( location.href ).split( '/includes/' )[ 0 ];
+
+         document.writeln( '<link rel="stylesheet" type="text/css" href="' + prefix + '/tools/source/jasmine/jasmine.css"></link>' );
+
+         var prerequisites = [ '/tools/source/jasmine/jasmine.js', '/tools/source/jasmine/jasmine-html.js', '/includes/lib/requirejs/require.js' ];
+         for( var i = 0; i < prerequisites.length; ++i ) {
+            document.writeln( '<script type="text/javascript" src="' + prefix + prerequisites[ i ] + '"><' + '/script>' );
+         };
+      })();
+   </script>
+
+   <script type="text/javascript">
+      (function() {
 
          // BEGIN: Inserted for specific module
 
@@ -17,7 +30,7 @@
          // folder called 'spec' within the module. Hence the baseUrl should point one folder up to the
          // main folder of this module (most probably '../').
          // Optionally it is necessary to configure the paths to all modules required by the module under test.
-         window.require = {
+         require.config({
             baseUrl: '../',
             paths: {
                underscore: '../underscore/underscore'
@@ -29,19 +42,9 @@
                   }
                }
             }
-         };
+         });
 
          // END: Inserted for specific module
-
-
-         var prefix = String( location.href ).split( '/includes/' )[ 0 ];
-
-         document.writeln( '<link rel="stylesheet" type="text/css" href="' + prefix + '/tools/source/jasmine/jasmine.css">' );
-
-         [ '/tools/source/jasmine/jasmine.js', '/tools/source/jasmine/jasmine-html.js', '/includes/lib/requirejs/require.js' ]
-         .forEach( function( file ) {
-            document.writeln( '<script type="text/javascript" src="' + prefix + file + '"><' + '/script>' );
-         } );
 
       })();
    </script>
@@ -67,13 +70,14 @@
                currentWindowOnload();
             }
 
-            require( window.tests, function() {
-               execJasmine();
-            } );
+            require( window.tests, execJasmine );
 
-            window.onfocus = function() {
-               // reload the page when the browser window gets the focus
-               window.location.reload();
+            // exclude IE as it triggers focus events like a maniac
+            if( navigator.userAgent.indexOf( 'MSIE' ) === -1 ) {
+               window.onfocus = function() {
+                  // reload the page when the browser window gets the focus
+                  window.location.reload();
+               }
             }
          };
 

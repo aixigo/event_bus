@@ -78,6 +78,15 @@
                   // reload the page when the browser window gets the focus
                   window.location.reload();
                }
+               if( window.location.search === "?reload=mouseover" ) {
+                  document.onmouseover = function( event ) {
+                     // reload the page when the browser window gets the focus
+                     if( event.target.nodeName === "HTML" ) {
+                        window.location.reload();
+                     }
+                  }
+               }
+
             }
          };
 

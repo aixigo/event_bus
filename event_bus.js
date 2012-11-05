@@ -17,48 +17,57 @@ define( [ 'underscore' ], function( _ ) {
 
    var Q_;
    var nextTick_;
+
    var PART_SEPARATOR = '.';
    var SUB_PART_SEPARATOR = '-';
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function EventBus() {
+   function EventBus( optionalConfig ) {
+      var config = optionalConfig || {};
+
+      this.cycleCounter_ = 0;
       this.eventQueue_ = [];
       this.subscribers_ = [];
       this.waitingDeferreds_ = [];
+      this.currentCycle_ = -1;
+      this.errorHandler_ = _.isFunction( config.errorHandler ) ? config.errorHandler : defaultErrorHandler;
+      this.mediator_ = _.isFunction( config.mediator ) ? config.mediator : defaultMediator;
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   EventBus.prototype.publish = function( eventName, optionalData ) {
+   /**
+    * Asynchronously publishes an event on the event bus.
+    *
+    * @param {String} eventName the name of the event to publish
+    * @param {Object=} optionalData data to send as payload with the event
+    * @return {Promise}
+    */
+   EventBus.prototype.publish = function publish( eventName, optionalData ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
 
-      var eventItem = {
+      var deferred = Q_.defer();
+      enqueueEvent( this, {
          name: eventName,
          data: arguments.length > 1 ? optionalData : {},
-         publishedDeferred: Q_.defer()
-      };
+         publishedDeferred: deferred,
+         cycleId: this.currentCycle_ === -1 ? this.cycleCounter_++ : this.currentCycle_
+      } );
 
-      if( this.eventQueue_.length === 0 ) {
-         nextTick_( _.bind( function() {
-            var subscribers = _.clone( this.subscribers_ );
-            var queuedEvents = this.eventQueue_;
-
-            this.eventQueue_ = [];
-
-            processWaitingDeferreds( this, processQueue( queuedEvents, subscribers ) );
-         }, this ) );
-      }
-      this.eventQueue_.push( eventItem );
-
-      return eventItem.publishedDeferred.promise;
+      return deferred.promise;
    };
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   EventBus.prototype.subscribe = function( eventName, subscriber ) {
+   /**
+    * Subscribes to a specific event.
+    * @param eventName
+    * @param subscriber
+    */
+   EventBus.prototype.subscribe = function subscribe( eventName, subscriber ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
@@ -74,38 +83,68 @@ define( [ 'underscore' ], function( _ ) {
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function processQueue( queuedEvents, subscribers ) {
-      return _.without( _.map( queuedEvents, function( eventItem ) {
+   function enqueueEvent( self, eventItem ) {
+      if( self.eventQueue_.length === 0 ) {
+         nextTick_( function() {
+            var subscribers = _.clone( self.subscribers_ );
+            var queuedEvents = self.eventQueue_;
+
+            self.eventQueue_ = [];
+
+            processWaitingDeferreds( self, processQueue( self, queuedEvents, subscribers ) );
+         } );
+      }
+      self.eventQueue_.push( eventItem );
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function processQueue( self, queuedEvents, subscribers ) {
+
+      queuedEvents = self.mediator_( _.reject( queuedEvents, function( eventItem ) {
+         return eventItem.name === 'EventBus.internal.flushDeferreds';
+      } ) );
+
+      var deferreds = _.map( queuedEvents, function( eventItem ) {
 
          var eventName = eventItem.name;
          _.each( subscribers, function( subscriberItem ) {
 
             if( isValidSubscriber( subscriberItem, eventName ) ) {
-               subscriberItem.subscriber( {
-                  name: eventItem.name,
-                  data: _.clone( eventItem.data )
-               } );
+               try {
+                  subscriberItem.subscriber( {
+                     name: eventItem.name,
+                     data: _.clone( eventItem.data ),
+                     cycleId: eventItem.cycleId || 0
+                  }, {
+                     publishResponse: function( eventName, optionalData ) {
+                        self.currentCycle_ = eventItem.cycleId;
+                        self.publish( eventName, optionalData );
+                        self.currentCycle_ = -1;
+                     }
+                  } );
+               }
+               catch( e ) {
+                  self.errorHandler_( e, eventItem, subscriberItem );
+               }
             }
 
          } );
 
-         // prevent from endless loop due to never ending internal flush events when processing the deferreds.
-         if( eventName === 'EventBus.internal.flushDeferreds' ) {
-            return null;
-         }
-
          return eventItem.publishedDeferred;
-      } ), null );
+      } );
+
+      return _.filter( deferreds, _.isObject );
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function processWaitingDeferreds( eventBus, newDeferreds ) {
-      var waitingDeferreds = eventBus.waitingDeferreds_;
-      eventBus.waitingDeferreds_ = newDeferreds;
+   function processWaitingDeferreds( self, newDeferreds ) {
+      var waitingDeferreds = self.waitingDeferreds_;
+      self.waitingDeferreds_ = newDeferreds;
 
-      if( eventBus.eventQueue_.length === 0 && newDeferreds.length > 0 ) {
-         eventBus.publish( 'EventBus.internal.flushDeferreds' );
+      if( self.eventQueue_.length === 0 && newDeferreds.length > 0 ) {
+         self.publish( 'EventBus.internal.flushDeferreds' );
       }
 
       _.each( waitingDeferreds, function( deferred ) {
@@ -156,9 +195,32 @@ define( [ 'underscore' ], function( _ ) {
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+   function defaultErrorHandler( e, eventItem, subscriberItem ) {
+      /*global console*/
+      if( !console || !_.isFunction( console.log ) ) {
+         return;
+      }
+
+      var errFunc = _.isFunction( console.error ) ? 'error' : 'log';
+      console[ errFunc ]( 'error while calling subscriber for event ' + eventItem.name +
+         ' (subscribed to: ' + subscriberItem.name + ')' );
+      console.log( e.message );
+      if( e.stack ) {
+         console.log( e.stack );
+      }
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function defaultMediator( eventItems ) {
+      return eventItems;
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
    return {
 
-      create: function() {
+      create: function( optionalConfig ) {
          if( !Q_ ) {
             throw new Error( 'Need a promise implementation like $q or Q' );
          }
@@ -166,7 +228,7 @@ define( [ 'underscore' ], function( _ ) {
             throw new Error( 'Need a next tick implementation like $timeout' );
          }
 
-         return new EventBus();
+         return new EventBus( optionalConfig );
       },
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////

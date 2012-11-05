@@ -15,360 +15,482 @@
 define( [ 'event_bus' ], function( event_bus ) {
    'use strict';
 
-   describe( 'EventBus', function() {
+   beforeEach( function() {
+      jasmine.Clock.useMock();
 
-      it( 'has a create method to create EventBus instances', function() {
-         expect( typeof event_bus.create ).toBe( 'function' );
+      event_bus.init( addQMock( this ), addTickMock( this ) );
+      this.eventBus_ = event_bus.create();
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   afterEach( function() {
+      event_bus.init( null, null );
+
+      delete this.eventBus_;
+
+      removeQMock( this );
+      removeTickMock( this );
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'An EventBus instance', function() {
+
+      it( 'calls a directly matching subscriber not during the current runloop', function() {
+         var mySpy = jasmine.createSpy();
+
+         this.eventBus_.subscribe( 'message.subject', mySpy );
+         this.eventBus_.publish( 'message.subject' );
+
+         expect( mySpy ).not.toHaveBeenCalled();
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      it( 'has a create method to init the module', function() {
-         expect( typeof event_bus.init ).toBe( 'function' );
+      it( 'eventually calls a directly matching subscriber', function() {
+         var mySpy = jasmine.createSpy();
+
+         this.eventBus_.subscribe( 'message.subject', mySpy );
+         this.eventBus_.publish( 'message.subject' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      it( 'throws exception if create is called without setting Q via init before', function() {
-         expect( event_bus.create ).toThrow();
+      it( 'never calls a subscriber that does not match', function() {
+         var mySpy = jasmine.createSpy();
+
+         this.eventBus_.subscribe( 'message.other_subject', mySpy );
+         this.eventBus_.publish( 'message.subject' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).not.toHaveBeenCalled();
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'Errors when calling subscribers', function() {
+
+      beforeEach( function() {
+         this.errorHandlerSpy_ = jasmine.createSpy();
+         this.eventBus_ = event_bus.create( { errorHandler: this.errorHandlerSpy_ } );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      it( 'throws exception if create is called without setting nextTick via init before', function() {
-         expect( function f() {
-            event_bus.create( {} );
+      it( 'can be handled by a custom error handler', function() {
+         this.eventBus_.subscribe( 'myEvent', function() {
+            throw new Error( 'this is an error' );
+         } );
+         this.eventBus_.publish( 'myEvent' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( this.errorHandlerSpy_ ).toHaveBeenCalled();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'don\'t prevent other subscribers from being called', function() {
+
+         this.eventBus_.subscribe( 'myEvent', function() {
+            throw new Error( 'this is an error' );
+         } );
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'myEvent', mySpy );
+         this.eventBus_.publish( 'myEvent' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'An event bus can have a mediator that', function() {
+
+      it( 'is called before calling subscribers with the current set of queued event items in order they were published', function() {
+         var mediatorSpy = jasmine.createSpy();
+         this.eventBus_ = event_bus.create( { mediator: mediatorSpy } );
+
+         this.eventBus_.publish( 'myEvent.1' );
+         this.eventBus_.publish( 'myEvent.2' );
+         this.eventBus_.publish( 'myEvent.3' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mediatorSpy ).toHaveBeenCalled();
+         expect( mediatorSpy.calls[0].args[0][0].name ).toEqual( 'myEvent.1' );
+         expect( mediatorSpy.calls[0].args[0][1].name ).toEqual( 'myEvent.2' );
+         expect( mediatorSpy.calls[0].args[0][2].name ).toEqual( 'myEvent.3' );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'can add event items', function() {
+         var mySpy = jasmine.createSpy();
+
+         this.eventBus_ = event_bus.create( { mediator: function( eventItems ) {
+            return eventItems.concat( [ {
+               name: 'myEvent.2',
+               data: {
+                  key: 'val'
+               }
+            } ] );
+         } } );
+         this.eventBus_.subscribe( 'myEvent.2', mySpy );
+         this.eventBus_.publish( 'myEvent.1' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+         expect( mySpy.calls[0].args[0].data.key ).toEqual( 'val' );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'can remove event items', function() {
+         var mySpy1 = jasmine.createSpy( 'mySpy1' );
+         var mySpy2 = jasmine.createSpy( 'mySpy2' );
+         var mySpy3 = jasmine.createSpy( 'mySpy3' );
+
+         this.eventBus_ = event_bus.create( { mediator: function( eventItems ) {
+            var res = [];
+            for( var i = 0; i < eventItems.length; ++i ) {
+               if( eventItems[ i ].name !== 'myEvent.2' ) {
+                  res.push( eventItems[ i ] );
+               }
+            }
+            return res;
+         } } );
+         this.eventBus_.subscribe( 'myEvent.1', mySpy1 );
+         this.eventBus_.subscribe( 'myEvent.2', mySpy2 );
+         this.eventBus_.subscribe( 'myEvent.3', mySpy3 );
+         this.eventBus_.publish( 'myEvent.1' );
+         this.eventBus_.publish( 'myEvent.2' );
+         this.eventBus_.publish( 'myEvent.3' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy1 ).toHaveBeenCalled();
+         expect( mySpy2 ).not.toHaveBeenCalled();
+         expect( mySpy3 ).toHaveBeenCalled();
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'Publishing', function() {
+
+      it( 'throws an error if the event name is missing', function() {
+         expect( this.eventBus_.publish ).toThrow();
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'Subscribing', function() {
+
+      it( 'throws an error when called without event name or subscriber callback', function() {
+         var eventBus = this.eventBus_;
+
+         expect( eventBus.subscribe ).toThrow();
+         expect( function() {
+            eventBus.subscribe( '' );
          } ).toThrow();
       } );
 
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'publishing provides a promise', function() {
+
+      it( 'that is resolved when there was no matching subscriber', function() {
+         var promise = this.eventBus_.publish( 'myEvent' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( promise.deferred.resolve ).toHaveBeenCalled();
+      } );
+
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      describe( 'instance', function() {
+      it( 'that is resolved when there was at least one matching subscriber', function() {
+         this.eventBus_.subscribe( 'myEvent', function() {} );
+         var promise = this.eventBus_.publish( 'myEvent' );
 
-         beforeEach( function() {
-            jasmine.Clock.useMock();
+         jasmine.Clock.tick( 101 );
 
-            event_bus.init( addQMock( this ), addTickMock( this ) );
-            this.eventBus_ = event_bus.create();
+         expect( promise.deferred.resolve ).toHaveBeenCalled();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'that is  only resolved after all subscribers had the chance to publish events on their own', function() {
+         var eventBus = this.eventBus_;
+         var subEventSubscriberCalled = false;
+         this.eventBus_.subscribe( 'event', function() {
+            eventBus.publish( 'subEvent' );
          } );
 
-         /////////////////////////////////////////////////////////////////////////////////////////////////////
-
-         afterEach( function() {
-            event_bus.init( null, null );
-
-            delete this.eventBus_;
-
-            removeQMock( this );
-            removeTickMock( this );
+         this.eventBus_.subscribe( 'subEvent', function() {
+            expect( promise.deferred.resolve ).not.toHaveBeenCalled();
+            subEventSubscriberCalled = true;
          } );
 
-         /////////////////////////////////////////////////////////////////////////////////////////////////////
+         var promise = this.eventBus_.publish( 'event' );
 
-         it( 'has a publish method', function() {
-            expect( typeof this.eventBus_.publish ).toBe( 'function' );
+         jasmine.Clock.tick( 101 );
+
+         expect( subEventSubscriberCalled ).toBe( true );
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'An EventBus instance where events were published', function() {
+
+      it( 'calls nextTick implementation exactly once during the runloop to schedule queue processing', function() {
+         expect( this.timerCallback_.callCount ).toEqual( 0 );
+
+         this.eventBus_.publish( 'myEvent' );
+         expect( this.timerCallback_.callCount ).toEqual( 1 );
+
+         this.eventBus_.publish( 'myEvent2' );
+         expect( this.timerCallback_.callCount ).toEqual( 1 );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should deliver the event object to the subscribers', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event ).toBeDefined();
          } );
 
-         /////////////////////////////////////////////////////////////////////////////////////////////////////
+         this.eventBus_.publish( 'myEvent' );
 
-         it( 'has a subscribe method', function() {
-            expect( typeof this.eventBus_.subscribe ).toBe( 'function' );
+         jasmine.Clock.tick( 101 );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should not deliver an unspecific event to a more specific subscriber', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'firstLevel.secondLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).not.toHaveBeenCalled();
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'An event object', function() {
+
+      it( 'should contain data sent with publish', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event.data ).toEqual( {
+               'myNumber': 12,
+               'myString': 'Hello'
+            } );
          } );
 
-         /////////////////////////////////////////////////////////////////////////////////////////////////////
-
-         it( 'calls a directly matching subscriber not during the current runloop', function() {
-            var mySpy = jasmine.createSpy();
-
-            this.eventBus_.subscribe( 'message.subject', mySpy );
-            this.eventBus_.publish( 'message.subject' );
-
-            expect( mySpy ).not.toHaveBeenCalled();
+         this.eventBus_.publish( 'myEvent', {
+            'myNumber': 12,
+            'myString': 'Hello'
          } );
 
-         /////////////////////////////////////////////////////////////////////////////////////////////////////
+         jasmine.Clock.tick( 101 );
+      } );
 
-         it( 'eventually calls a directly matching subscriber', function() {
-            var mySpy = jasmine.createSpy();
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            this.eventBus_.subscribe( 'message.subject', mySpy );
-            this.eventBus_.publish( 'message.subject' );
-
-            jasmine.Clock.tick( 101 );
-
-            expect( mySpy ).toHaveBeenCalled();
+      it( 'should at least contain an empty object if no data was published', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event.data ).toEqual( {} );
          } );
 
-         /////////////////////////////////////////////////////////////////////////////////////////////////////
+         this.eventBus_.publish( 'myEvent' );
 
-         it( 'never calls a subscriber that does not match', function() {
-            var mySpy = jasmine.createSpy();
+         jasmine.Clock.tick( 101 );
+      } );
 
-            this.eventBus_.subscribe( 'message.other_subject', mySpy );
-            this.eventBus_.publish( 'message.subject' );
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            jasmine.Clock.tick( 101 );
-
-            expect( mySpy ).not.toHaveBeenCalled();
+      it( 'should prevent from manipulating data by other subscribers', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event.data ).toEqual( { 'key': 'val' } );
+            event.data.key = 'evil';
+         } );
+         this.eventBus_.subscribe( 'myEvent', function( event ) {
+            expect( event.data ).toEqual( { 'key': 'val' } );
+            event.data.key = 'evil';
          } );
 
-         /////////////////////////////////////////////////////////////////////////////////////////////////////
-
-         describe( 'publish', function() {
-
-            it( 'throws when called without mandatory argument eventName', function() {
-               expect( this.eventBus_.publish ).toThrow();
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'adds event to the event queue', function() {
-               expect( this.eventBus_.eventQueue_.length ).toBe( 0 );
-
-               this.eventBus_.publish( 'myEvent' );
-
-               expect( this.eventBus_.eventQueue_.length ).toBe( 1 );
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'returns a promise', function() {
-               var promise = this.eventBus_.publish( 'myEvent' );
-
-               expect( promise ).toBeDefined();
-               expect( promise.then ).toBeDefined();
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'calls nextTick implementation once during runloop to schedule queue processing', function() {
-               expect( this.timerCallback_.callCount ).toEqual( 0 );
-
-               this.eventBus_.publish( 'myEvent' );
-               expect( this.timerCallback_.callCount ).toEqual( 1 );
-
-               this.eventBus_.publish( 'myEvent2' );
-               expect( this.timerCallback_.callCount ).toEqual( 1 );
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'resolves the promise when there was no matching subscriber', function() {
-               var promise = this.eventBus_.publish( 'myEvent' );
-
-               jasmine.Clock.tick( 101 );
-
-               expect( promise.deferred.resolve ).toHaveBeenCalled();
-
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'resolves the promise when there was at least one matching subscriber', function() {
-               this.eventBus_.subscribe( 'myEvent', function() {} );
-               var promise = this.eventBus_.publish( 'myEvent' );
-
-               jasmine.Clock.tick( 101 );
-
-               expect( promise.deferred.resolve ).toHaveBeenCalled();
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'should only resolve the promise after all subscribers had the chance to publish events on their own', function() {
-               var eventBus = this.eventBus_;
-               var subEventSubscriberCalled = false;
-               this.eventBus_.subscribe( 'event', function() {
-                  eventBus.publish( 'subEvent' );
-               } );
-
-               this.eventBus_.subscribe( 'subEvent', function() {
-                  expect( promise.deferred.resolve ).not.toHaveBeenCalled();
-                  subEventSubscriberCalled = true;
-               } );
-
-               var promise = this.eventBus_.publish( 'event' );
-
-               jasmine.Clock.tick( 101 );
-
-               expect( subEventSubscriberCalled ).toBe( true );
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'should deliver the event object to the subscribers', function() {
-               this.eventBus_.subscribe( 'myEvent', function( event ) {
-                  expect( event ).toBeDefined();
-               } );
-
-               this.eventBus_.publish( 'myEvent' );
-
-               jasmine.Clock.tick( 101 );
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'should deliver an event object with certain properties', function() {
-               this.eventBus_.subscribe( 'myEvent', function( event ) {
-                  expect( event.name ).toBe( 'myEvent' );
-               } );
-
-               this.eventBus_.publish( 'myEvent' );
-
-               jasmine.Clock.tick( 101 );
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'should deliver data within the event object', function() {
-               this.eventBus_.subscribe( 'myEvent', function( event ) {
-                  expect( event.data ).toEqual( {
-                     'myNumber': 12,
-                     'myString': 'Hello'
-                  } );
-               } );
-
-               this.eventBus_.publish( 'myEvent', {
-                  'myNumber': 12,
-                  'myString': 'Hello'
-               } );
-
-               jasmine.Clock.tick( 101 );
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'should deliver an empty object for missing data within the event object', function() {
-               this.eventBus_.subscribe( 'myEvent', function( event ) {
-                  expect( event.data ).toEqual( {} );
-               } );
-
-               this.eventBus_.publish( 'myEvent' );
-
-               jasmine.Clock.tick( 101 );
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'should prevent from manipulating data for other subscribers', function() {
-               this.eventBus_.subscribe( 'myEvent', function( event ) {
-                  expect( event.data ).toEqual( { 'key': 'val' } );
-                  event.data.key = 'evil';
-               } );
-               this.eventBus_.subscribe( 'myEvent', function( event ) {
-                  expect( event.data ).toEqual( { 'key': 'val' } );
-                  event.data.key = 'evil';
-               } );
-
-               this.eventBus_.publish( 'myEvent', {
-                  'key': 'val'
-               } );
-
-               jasmine.Clock.tick( 101 );
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'should not deliver an unspecific event to a more specific subscriber', function() {
-               var mySpy = jasmine.createSpy();
-               this.eventBus_.subscribe( 'firstLevel.secondLevel', mySpy );
-               this.eventBus_.publish( 'firstLevel' );
-
-               jasmine.Clock.tick( 101 );
-
-               expect( mySpy ).not.toHaveBeenCalled();
-            } );
-
+         this.eventBus_.publish( 'myEvent', {
+            'key': 'val'
          } );
 
-         /////////////////////////////////////////////////////////////////////////////////////////////////////
+         jasmine.Clock.tick( 101 );
+      } );
 
-         describe( 'subscribe', function() {
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            it( 'throws when called without mandatory arguments', function() {
-               var eventBus = this.eventBus_;
-               expect( eventBus.subscribe ).toThrow();
+      it( 'carries a unique identifier for the current cycle', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'myEvent', mySpy );
+         this.eventBus_.publish( 'myEvent' );
+         this.eventBus_.publish( 'myEvent' );
 
-               // NEEDS FIX C: is there a better way to express that the second argument is also mandatory in case the first is given?
-               expect( function() {
-                  eventBus.subscribe( '' );
-               } ).toThrow();
-            } );
+         jasmine.Clock.tick( 101 );
 
-            //////////////////////////////////////////////////////////////////////////////////////////////////
+         expect( mySpy.calls[ 0 ].args[ 0 ].cycleId ).not.toEqual( mySpy.calls[ 1 ].args[ 1 ].cycleId );
+      } );
 
-            it( 'allows wildcard at the end of the event name', function() {
-               var mySpy = jasmine.createSpy();
-               this.eventBus_.subscribe( 'firstLevel.secondLevel', mySpy );
-               this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel' );
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-               jasmine.Clock.tick( 101 );
-
-               expect( mySpy ).toHaveBeenCalled();
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'allows wildcard at the beginning of the event name', function() {
-               var mySpy = jasmine.createSpy();
-               this.eventBus_.subscribe( '.secondLevel.thirdLevel', mySpy );
-               this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel' );
-
-               jasmine.Clock.tick( 101 );
-
-               expect( mySpy ).toHaveBeenCalled();
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'allows wildcards anywhere in the event name', function() {
-               var mySpy = jasmine.createSpy();
-               this.eventBus_.subscribe( 'firstLevel..thirdLevel', mySpy );
-               this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel' );
-
-               jasmine.Clock.tick( 101 );
-
-               expect( mySpy ).toHaveBeenCalled();
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'allows matching of inner wildcards using minus', function() {
-               var mySpy = jasmine.createSpy();
-               this.eventBus_.subscribe( 'firstLevel.secondLevel.thirdLevel', mySpy );
-               this.eventBus_.publish( 'firstLevel-here.secondLevel.thirdLevel' );
-
-               jasmine.Clock.tick( 101 );
-
-               expect( mySpy ).toHaveBeenCalled();
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'allows matching of inner wildcards using minus combined with wildcards', function() {
-               var mySpy = jasmine.createSpy();
-               this.eventBus_.subscribe( 'firstLevel..thirdLevel', mySpy );
-               this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel-here' );
-
-               jasmine.Clock.tick( 101 );
-
-               expect( mySpy ).toHaveBeenCalled();
-            } );
-
-            //////////////////////////////////////////////////////////////////////////////////////////////////
-
-            it( 'allows matching of inner wildcards using minus with wildcards only', function() {
-               var mySpy = jasmine.createSpy();
-               this.eventBus_.subscribe( 'firstLevel', mySpy );
-               this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel-here' );
-
-               jasmine.Clock.tick( 101 );
-
-               expect( mySpy ).toHaveBeenCalled();
-            } );
-
+      it( 'has the same cycle id in the response of an event as the original event had', function() {
+         var cycleId;
+         this.eventBus_.subscribe( 'myEvent', function( event, actions ) {
+            cycleId = event.cycleId;
+            actions.publishResponse( 'myResponse' );
          } );
+         this.eventBus_.publish( 'myEvent' );
 
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'myResponse', mySpy );
+
+         jasmine.Clock.tick( 101 );
+         expect( mySpy.calls[ 0 ].args[ 0 ].cycleId ).toEqual( cycleId );
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'An action object', function() {
+
+      it( 'is always send to subscribers additionally to the event object', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'myEvent', mySpy );
+         this.eventBus_.publish( 'myEvent' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy.calls[ 0 ].args.length ).toBe( 2 );
+         expect( mySpy.calls[ 0 ].args[ 1 ] ).toBeDefined();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'provides a way to directly pusblish a response to the given event', function() {
+         this.eventBus_.subscribe( 'myEvent', function( event, actions ) {
+            actions.publishResponse( 'myResponse' );
+         } );
+         this.eventBus_.publish( 'myEvent' );
+
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'myResponse', mySpy );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'Subscribe allows wildcards', function() {
+
+      it( 'at the end of the event name', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'firstLevel.secondLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'at the beginning of the event name', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( '.secondLevel.thirdLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'anywhere in the event name', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'firstLevel..thirdLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'Subscribe allows inner wildcards', function() {
+
+      it( 'using minus', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'firstLevel.secondLevel.thirdLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel-here.secondLevel.thirdLevel' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'using minus combined with wildcards', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'firstLevel..thirdLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel-here' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'using minus with wildcards only', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'firstLevel', mySpy );
+         this.eventBus_.publish( 'firstLevel.secondLevel.thirdLevel-here' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
       } );
 
    } );

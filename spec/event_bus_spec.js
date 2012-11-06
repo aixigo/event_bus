@@ -453,6 +453,18 @@ define( [ 'event_bus' ], function( event_bus ) {
          expect( mySpy ).toHaveBeenCalled();
       } );
 
+      ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'as the empty string in the subscriber', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( '', mySpy );
+         this.eventBus_.publish( 'myEvent' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+      } );
+
    } );
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

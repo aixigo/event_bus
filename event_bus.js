@@ -23,17 +23,34 @@ define( [ 'underscore' ], function( _ ) {
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function EventBus( optionalConfig ) {
-      var config = optionalConfig || {};
-
+   function EventBus() {
       this.cycleCounter_ = 0;
       this.eventQueue_ = [];
       this.subscribers_ = [];
       this.waitingDeferreds_ = [];
       this.currentCycle_ = -1;
-      this.errorHandler_ = _.isFunction( config.errorHandler ) ? config.errorHandler : defaultErrorHandler;
-      this.mediator_ = _.isFunction( config.mediator ) ? config.mediator : defaultMediator;
+      this.errorHandler_ = defaultErrorHandler;
+      this.mediator_ = defaultMediator;
+      this.inspector_ = defaultInspector;
    }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   EventBus.prototype.setErrorHandler = function( optionalErrorHandler ) {
+      this.errorHandler_ = _.isFunction( optionalErrorHandler ) ? optionalErrorHandler : defaultErrorHandler;
+   };
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   EventBus.prototype.setMediator = function( optionalMediator ) {
+      this.mediator_ = _.isFunction( optionalMediator ) ? optionalMediator : defaultMediator;
+   };
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   EventBus.prototype.setInspector = function( optionalInspector ) {
+      this.inspector_ = _.isFunction( optionalInspector ) ? optionalInspector : defaultInspector;
+   };
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,32 +59,46 @@ define( [ 'underscore' ], function( _ ) {
     *
     * @param {String} eventName the name of the event to publish
     * @param {Object=} optionalData data to send as payload with the event
+    * @param {String=} optionalPublisherName a name for the publisher (for debugging purpose)
     * @return {Promise}
     */
-   EventBus.prototype.publish = function publish( eventName, optionalData ) {
+   EventBus.prototype.publish = function publish( eventName, optionalData, optionalPublisherName ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
 
-      var deferred = Q_.defer();
-      enqueueEvent( this, {
+      var eventItem = {
          name: eventName,
          data: arguments.length > 1 ? optionalData : {},
-         publishedDeferred: deferred,
-         cycleId: this.currentCycle_ === -1 ? this.cycleCounter_++ : this.currentCycle_
-      } );
+         publishedDeferred: Q_.defer(),
+         cycleId: this.currentCycle_ === -1 ? this.cycleCounter_++ : this.currentCycle_,
+         publisherName: _.isString( optionalPublisherName ) ? optionalPublisherName : ''
+      };
+      enqueueEvent( this, eventItem );
 
-      return deferred.promise;
+      if( eventName !== 'EventBus.internal.flushDeferreds' ) {
+         this.inspector_( {
+            action: 'publish',
+            source: eventItem.publisherName,
+            event: eventName,
+            data: eventItem.data,
+            cycleId: eventItem.cycleId
+         } );
+      }
+
+      return eventItem.publishedDeferred.promise;
    };
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
    /**
     * Subscribes to a specific event.
-    * @param eventName
-    * @param subscriber
+    *
+    * @param {String} eventName the name of the event to subscribe to
+    * @param {Function} subscriber a function to call when the event is published
+    * @param {String=} optionalSubscriberName a name for the subscriber (for debugging purpose)
     */
-   EventBus.prototype.subscribe = function subscribe( eventName, subscriber ) {
+   EventBus.prototype.subscribe = function subscribe( eventName, subscriber, optionalSubscriberName ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
@@ -75,9 +106,17 @@ define( [ 'underscore' ], function( _ ) {
          throw new Error( 'Expected listener to be a function but got ' + subscriber );
       }
 
+      var subscriberName = _.isString( optionalSubscriberName ) ? optionalSubscriberName : '';
       this.subscribers_.push( {
          name: eventName,
-         subscriber: subscriber
+         subscriber: subscriber,
+         subscriberName: subscriberName
+      } );
+
+      this.inspector_( {
+         action: 'subscribe',
+         source: subscriberName,
+         event: eventName
       } );
    };
 
@@ -111,6 +150,7 @@ define( [ 'underscore' ], function( _ ) {
          _.each( subscribers, function( subscriberItem ) {
 
             if( isValidSubscriber( subscriberItem, eventName ) ) {
+               var success = true;
                try {
                   subscriberItem.subscriber( {
                      name: eventItem.name,
@@ -123,10 +163,22 @@ define( [ 'underscore' ], function( _ ) {
                         self.currentCycle_ = -1;
                      }
                   } );
+
                }
                catch( e ) {
                   self.errorHandler_( e, eventItem, subscriberItem );
+                  success = false;
                }
+
+               self.inspector_( {
+                  action: 'deliver',
+                  source: eventItem.publisherName,
+                  target: subscriberItem.subscriberName,
+                  event: eventName,
+                  subscribedTo: subscriberItem.name,
+                  cycleId: eventItem.cycleId,
+                  success: success
+               } );
             }
 
          } );
@@ -218,9 +270,13 @@ define( [ 'underscore' ], function( _ ) {
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+   function defaultInspector( inspectionEvent ) {}
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
    return {
 
-      create: function( optionalConfig ) {
+      create: function() {
          if( !Q_ ) {
             throw new Error( 'Need a promise implementation like $q or Q' );
          }
@@ -228,7 +284,7 @@ define( [ 'underscore' ], function( _ ) {
             throw new Error( 'Need a next tick implementation like $timeout' );
          }
 
-         return new EventBus( optionalConfig );
+         return new EventBus();
       },
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////

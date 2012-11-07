@@ -79,8 +79,15 @@ define( [ 'event_bus' ], function( event_bus ) {
    describe( 'Errors when calling subscribers', function() {
 
       beforeEach( function() {
-         this.errorHandlerSpy_ = jasmine.createSpy();
-         this.eventBus_ = event_bus.create( { errorHandler: this.errorHandlerSpy_ } );
+         this.errorHandlerSpy_ = jasmine.createSpy( 'errorHandler' );
+         this.eventBus_.setErrorHandler( this.errorHandlerSpy_ );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      afterEach( function() {
+         this.eventBus_.setErrorHandler( null );
+         delete this.errorHandlerSpy_;
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,7 +127,7 @@ define( [ 'event_bus' ], function( event_bus ) {
 
       it( 'is called before calling subscribers with the current set of queued event items in order they were published', function() {
          var mediatorSpy = jasmine.createSpy();
-         this.eventBus_ = event_bus.create( { mediator: mediatorSpy } );
+         this.eventBus_.setMediator( mediatorSpy );
 
          this.eventBus_.publish( 'myEvent.1' );
          this.eventBus_.publish( 'myEvent.2' );
@@ -139,14 +146,14 @@ define( [ 'event_bus' ], function( event_bus ) {
       it( 'can add event items', function() {
          var mySpy = jasmine.createSpy();
 
-         this.eventBus_ = event_bus.create( { mediator: function( eventItems ) {
+         this.eventBus_.setMediator(  function( eventItems ) {
             return eventItems.concat( [ {
                name: 'myEvent.2',
                data: {
                   key: 'val'
                }
             } ] );
-         } } );
+         } );
          this.eventBus_.subscribe( 'myEvent.2', mySpy );
          this.eventBus_.publish( 'myEvent.1' );
 
@@ -163,7 +170,7 @@ define( [ 'event_bus' ], function( event_bus ) {
          var mySpy2 = jasmine.createSpy( 'mySpy2' );
          var mySpy3 = jasmine.createSpy( 'mySpy3' );
 
-         this.eventBus_ = event_bus.create( { mediator: function( eventItems ) {
+         this.eventBus_.setMediator( function( eventItems ) {
             var res = [];
             for( var i = 0; i < eventItems.length; ++i ) {
                if( eventItems[ i ].name !== 'myEvent.2' ) {
@@ -171,7 +178,7 @@ define( [ 'event_bus' ], function( event_bus ) {
                }
             }
             return res;
-         } } );
+         } );
          this.eventBus_.subscribe( 'myEvent.1', mySpy1 );
          this.eventBus_.subscribe( 'myEvent.2', mySpy2 );
          this.eventBus_.subscribe( 'myEvent.3', mySpy3 );
@@ -184,6 +191,81 @@ define( [ 'event_bus' ], function( event_bus ) {
          expect( mySpy1 ).toHaveBeenCalled();
          expect( mySpy2 ).not.toHaveBeenCalled();
          expect( mySpy3 ).toHaveBeenCalled();
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'an event bus can have an inspector', function() {
+
+      beforeEach( function() {
+         this.inspectorSpy_ = jasmine.createSpy( 'inspector' );
+         this.eventBus_.setInspector( this.inspectorSpy_ );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      afterEach( function() {
+         this.eventBus_.setInspector( null );
+         delete this.inspectorSpy_;
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'that is called for every new subscription', function() {
+         this.eventBus_.subscribe( 'someEvent', jasmine.createSpy(), 'subscriberX' );
+
+         expect( this.inspectorSpy_ ).toHaveBeenCalled();
+         expect( this.inspectorSpy_.calls[0].args[0].action ).toEqual( 'subscribe' );
+         expect( this.inspectorSpy_.calls[0].args[0].source ).toEqual( 'subscriberX' );
+         expect( this.inspectorSpy_.calls[0].args[0].event ).toEqual( 'someEvent' );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'that is called for every publish', function() {
+         this.eventBus_.publish( 'someEvent', {
+            some: 'payload'
+         }, 'publisherX' );
+
+         expect( this.inspectorSpy_ ).toHaveBeenCalled();
+         expect( this.inspectorSpy_.calls[0].args[0].action ).toEqual( 'publish' );
+         expect( this.inspectorSpy_.calls[0].args[0].source ).toEqual( 'publisherX' );
+         expect( this.inspectorSpy_.calls[0].args[0].event ).toEqual( 'someEvent' );
+         expect( this.inspectorSpy_.calls[0].args[0].data ).toEqual( { some: 'payload' } );
+         expect( this.inspectorSpy_.calls[0].args[0].cycleId ).toEqual( 0 );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'that is called every time an event is delivered to a subscriber', function() {
+         this.eventBus_.subscribe( 'someEvent', jasmine.createSpy(), 'subscriber1' );
+         this.eventBus_.subscribe( 'someEvent.withSubject', function() {
+            throw new Error( 'I fail!' );
+         }, 'subscriber2' );
+         this.eventBus_.publish( 'someEvent.withSubject', {
+            some: 'payload'
+         }, 'publisherX' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( this.inspectorSpy_ ).toHaveBeenCalled();
+         expect( this.inspectorSpy_.calls[3].args[0].action ).toEqual( 'deliver' );
+         expect( this.inspectorSpy_.calls[3].args[0].source ).toEqual( 'publisherX' );
+         expect( this.inspectorSpy_.calls[3].args[0].target ).toEqual( 'subscriber1' );
+         expect( this.inspectorSpy_.calls[3].args[0].event ).toEqual( 'someEvent.withSubject' );
+         expect( this.inspectorSpy_.calls[3].args[0].subscribedTo ).toEqual( 'someEvent' );
+         expect( this.inspectorSpy_.calls[3].args[0].success ).toEqual( true );
+         expect( this.inspectorSpy_.calls[3].args[0].cycleId ).toEqual( 0 );
+
+         expect( this.inspectorSpy_.calls[4].args[0].action ).toEqual( 'deliver' );
+         expect( this.inspectorSpy_.calls[4].args[0].source ).toEqual( 'publisherX' );
+         expect( this.inspectorSpy_.calls[4].args[0].target ).toEqual( 'subscriber2' );
+         expect( this.inspectorSpy_.calls[4].args[0].event ).toEqual( 'someEvent.withSubject' );
+         expect( this.inspectorSpy_.calls[4].args[0].subscribedTo ).toEqual( 'someEvent.withSubject' );
+         expect( this.inspectorSpy_.calls[4].args[0].success ).toEqual( false );
+         expect( this.inspectorSpy_.calls[4].args[0].cycleId ).toEqual( 0 );
       } );
 
    } );

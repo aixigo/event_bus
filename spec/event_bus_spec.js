@@ -591,6 +591,26 @@ define( [ 'event_bus' ], function( event_bus ) {
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+   describe( 'An EventBus cleanup mechanism', function() {
+
+      it( 'removes all subscribers for all events', function() {
+         var mySpy = jasmine.createSpy();
+         this.eventBus_.subscribe( 'myEvent', mySpy );
+
+         this.eventBus_.unsubscribeAll();
+
+         this.eventBus_.publish( 'myEvent' );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).not.toHaveBeenCalled();
+
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
    function addTickMock( thisObject ) {
       thisObject.timerCallback_ = jasmine.createSpy( 'timerCallback_' );
       return function( func ) {

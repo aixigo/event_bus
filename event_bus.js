@@ -12,7 +12,9 @@
 //  http://www.aixigo.de
 //  Aachen, Germany
 //
-define( [ 'underscore' ], function( _ ) {
+define( [
+   'lib/underscore/underscore'
+], function( _ ) {
    'use strict';
 
    var Q_;

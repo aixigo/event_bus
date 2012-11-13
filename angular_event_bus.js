@@ -12,7 +12,10 @@
 //  http://www.aixigo.de
 //  Aachen, Germany
 //
-define( [ 'angular', './event_bus' ], function( angular, event_bus ) {
+define( [
+   'lib/angularjs/angular',
+   './event_bus'
+], function( angular, event_bus ) {
    'use strict';
 
    var module = angular.module( 'lib.event_bus', [] );

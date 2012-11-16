@@ -242,7 +242,7 @@ define( [ 'event_bus' ], function( event_bus ) {
       it( 'that is called every time an event is delivered to a subscriber', function() {
          this.eventBus_.subscribe( 'someEvent', jasmine.createSpy(), 'subscriber1' );
          this.eventBus_.subscribe( 'someEvent.withSubject', function() {
-            throw new Error( 'I fail!' );
+            throw new Error( 'I have to fail!' );
          }, 'subscriber2' );
          this.eventBus_.publish( 'someEvent.withSubject', {
             some: 'payload'

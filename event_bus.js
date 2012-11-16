@@ -78,15 +78,13 @@ define( [
       };
       enqueueEvent( this, eventItem );
 
-      if( eventName !== 'EventBus.internal.flushDeferreds' ) {
-         this.inspector_( {
-            action: 'publish',
-            source: eventItem.publisherName,
-            event: eventName,
-            data: eventItem.data,
-            cycleId: eventItem.cycleId
-         } );
-      }
+      this.inspector_( {
+         action: 'publish',
+         source: eventItem.publisherName,
+         event: eventName,
+         data: eventItem.data,
+         cycleId: eventItem.cycleId
+      } );
 
       return eventItem.publishedDeferred.promise;
    };
@@ -148,9 +146,7 @@ define( [
 
    function processQueue( self, queuedEvents, subscribers ) {
 
-      queuedEvents = self.mediator_( _.reject( queuedEvents, function( eventItem ) {
-         return eventItem.name === 'EventBus.internal.flushDeferreds';
-      } ) );
+      queuedEvents = self.mediator_( queuedEvents );
 
       var deferreds = _.map( queuedEvents, function( eventItem ) {
 
@@ -194,7 +190,7 @@ define( [
          return eventItem.publishedDeferred;
       } );
 
-      return _.filter( deferreds, _.isObject );
+      return deferreds;
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,13 +199,17 @@ define( [
       var waitingDeferreds = self.waitingDeferreds_;
       self.waitingDeferreds_ = newDeferreds;
 
-      if( self.eventQueue_.length === 0 && newDeferreds.length > 0 ) {
-         self.publish( 'EventBus.internal.flushDeferreds' );
-      }
-
       _.each( waitingDeferreds, function( deferred ) {
          deferred.resolve();
       } );
+
+      if( self.eventQueue_.length === 0 ) {
+         // nothing was queued by any subscriber. The publishers can instantly be notified of delivery.
+         _.each( newDeferreds, function( deferred ) {
+            deferred.resolve();
+         } );
+         self.waitingDeferreds_ = [];
+      }
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

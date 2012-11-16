@@ -33,10 +33,10 @@
          require.config({
             baseUrl: '../',
             paths: {
-               underscore: '../underscore/underscore'
+               'lib/underscore/underscore': '../underscore/underscore'
             },
             shim: {
-               underscore: {
+               'lib/underscore/underscore': {
                   exports: function() {
                      return this._.noConflict();
                   }
@@ -73,20 +73,11 @@
             require( window.tests, execJasmine );
 
             // exclude IE as it triggers focus events like a maniac
-            if( navigator.userAgent.indexOf( 'MSIE' ) === -1 ) {
+            if( navigator.userAgent.indexOf( 'Chrome/' ) !== -1 ) {
                window.onfocus = function() {
                   // reload the page when the browser window gets the focus
                   window.location.reload();
                }
-               if( window.location.search === "?reload=mouseover" ) {
-                  document.onmouseover = function( event ) {
-                     // reload the page when the browser window gets the focus
-                     if( event.target.nodeName === "HTML" ) {
-                        window.location.reload();
-                     }
-                  }
-               }
-
             }
          };
 

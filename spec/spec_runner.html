@@ -37,7 +37,8 @@
             },
             shim: {
                'lib/underscore/underscore': {
-                  exports: function() {
+                  exports: '_',
+                  init: function() {
                      return this._.noConflict();
                   }
                }

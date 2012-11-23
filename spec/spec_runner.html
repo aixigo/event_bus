@@ -72,7 +72,7 @@
 
             require( window.tests, execJasmine );
 
-            // exclude IE as it triggers focus events like a maniac
+            // only chrome can handle focus events and reload the window reasonable
             if( navigator.userAgent.indexOf( 'Chrome/' ) !== -1 ) {
                window.onfocus = function() {
                   // reload the page when the browser window gets the focus

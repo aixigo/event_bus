@@ -256,7 +256,6 @@ define( [ 'event_bus' ], function( event_bus ) {
          expect( this.inspectorSpy_.calls[3].args[0].target ).toEqual( 'subscriber1' );
          expect( this.inspectorSpy_.calls[3].args[0].event ).toEqual( 'someEvent.withSubject' );
          expect( this.inspectorSpy_.calls[3].args[0].subscribedTo ).toEqual( 'someEvent' );
-         expect( this.inspectorSpy_.calls[3].args[0].success ).toEqual( true );
          expect( this.inspectorSpy_.calls[3].args[0].cycleId ).toEqual( 0 );
 
          expect( this.inspectorSpy_.calls[4].args[0].action ).toEqual( 'deliver' );
@@ -264,7 +263,6 @@ define( [ 'event_bus' ], function( event_bus ) {
          expect( this.inspectorSpy_.calls[4].args[0].target ).toEqual( 'subscriber2' );
          expect( this.inspectorSpy_.calls[4].args[0].event ).toEqual( 'someEvent.withSubject' );
          expect( this.inspectorSpy_.calls[4].args[0].subscribedTo ).toEqual( 'someEvent.withSubject' );
-         expect( this.inspectorSpy_.calls[4].args[0].success ).toEqual( false );
          expect( this.inspectorSpy_.calls[4].args[0].cycleId ).toEqual( 0 );
       } );
 

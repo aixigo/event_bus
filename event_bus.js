@@ -168,11 +168,10 @@ define( [
       this.publish( eventName, optionalData, optionalPublisherName ).then( function() {
          if( givenWillResponses === givenDidResponses.length ) {
             // either there was no will or all did reponses were already given in the same cycle as the will
-            finish();
+            return finish();
          }
-         else {
-            cycleNotFinished = true;
-         }
+
+         cycleNotFinished = true;
       } );
 
       var self = this;
@@ -200,7 +199,7 @@ define( [
       var inspector = this.inspector_;
       this.subscribers_ = _.filter( this.subscribers_, function( subscriberItem ) {
          if( subscriberItem.subscriber !== subscriber ) {
-            return false;
+            return true;
          }
 
          inspector( {
@@ -208,8 +207,7 @@ define( [
             source: subscriberItem.subscriberName,
             event: subscriberItem.name
          } );
-
-         return true;
+         return false;
       } );
    };
 
@@ -250,7 +248,15 @@ define( [
          _.each( subscribers, function( subscriberItem ) {
 
             if( isValidSubscriber( subscriberItem, eventName ) ) {
-               var success = true;
+               self.inspector_( {
+                  action: 'deliver',
+                  source: eventItem.publisherName,
+                  target: subscriberItem.subscriberName,
+                  event: eventName,
+                  subscribedTo: subscriberItem.name,
+                  cycleId: eventItem.cycleId
+               } );
+
                try {
                   subscriberItem.subscriber( {
                      name: eventItem.name,
@@ -267,18 +273,7 @@ define( [
                }
                catch( e ) {
                   self.errorHandler_( e, eventItem, subscriberItem );
-                  success = false;
                }
-
-               self.inspector_( {
-                  action: 'deliver',
-                  source: eventItem.publisherName,
-                  target: subscriberItem.subscriberName,
-                  event: eventName,
-                  subscribedTo: subscriberItem.name,
-                  cycleId: eventItem.cycleId,
-                  success: success
-               } );
             }
 
          } );

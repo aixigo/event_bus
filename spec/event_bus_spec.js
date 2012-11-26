@@ -591,9 +591,98 @@ define( [ 'event_bus' ], function( event_bus ) {
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   describe( 'An EventBus cleanup mechanism', function() {
+   describe( 'An event bus supports a request-will-did pattern', function() {
 
-      it( 'removes all subscribers for all events', function() {
+      beforeEach( function() {
+         var eventBus = this.eventBus_;
+         eventBus.subscribe( 'doSomethingAsyncRequest', function() {
+            eventBus.publish( 'willDoSomethingAsync' );
+            window.setTimeout( function() {
+               eventBus.publish( 'didDoSomethingAsync.andItWorked' );
+            }, 10 );
+         } );
+         eventBus.subscribe( 'doSomethingSyncRequest', function() {
+            eventBus.publish( 'willDoSomethingSync' );
+            eventBus.publish( 'didDoSomethingSync.andItWorked' );
+         } );
+         eventBus.subscribe( 'doSomethingSyncRequest.subTopic', function() {
+            eventBus.publish( 'willDoSomethingSync.subTopic' );
+            eventBus.publish( 'didDoSomethingSync.subTopic.andItWorked' );
+         } );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'throws when the event name doesn\'t end with "Request"', function() {
+         var eventBus = this.eventBus_;
+         expect( function() {
+            eventBus.publishAndGatherReplies( 'wronglyNamedEvent' );
+         } ).toThrow();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'accepts if there is a subject part after the "Request"', function() {
+         var eventBus = this.eventBus_;
+         expect( function() {
+            eventBus.publishAndGatherReplies( 'mySimpleRequest.someSubject' );
+         } ).not.toThrow();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'whose promise is resolved only after all will-did replies were given asynchronously', function() {
+         var mySpy = jasmine.createSpy( 'request chain async' );
+         this.eventBus_.publishAndGatherReplies( 'doSomethingAsyncRequest' ).then( mySpy );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+         expect( mySpy.calls[0].args[0].length ).toEqual( 1 );
+         expect( mySpy.calls[0].args[0][0].name ).toEqual( 'didDoSomethingAsync.andItWorked' );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'whose promise is resolved only after all will-did replies were given synchronously', function() {
+         var mySpy = jasmine.createSpy( 'request chain sync' );
+         this.eventBus_.publishAndGatherReplies( 'doSomethingSyncRequest' ).then( mySpy );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+         expect( mySpy.calls[0].args[0].length ).toEqual( 1 );
+         expect( mySpy.calls[0].args[0][0].name ).toEqual( 'didDoSomethingSync.andItWorked' );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'only listens to did/will answers for the given subject', function() {
+         var mySpy = jasmine.createSpy( 'request chain' );
+
+         var eventBus = this.eventBus_;
+         eventBus.subscribe( 'doSomethingSyncRequest', function() {
+            eventBus.publish( 'willDoSomethingSync.subTopic' );
+            eventBus.publish( 'didDoSomethingSync.subTopic.andItDidntWork' );
+         } );
+
+         this.eventBus_.publishAndGatherReplies( 'doSomethingSyncRequest.subTopic' ).then( mySpy );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+         expect( mySpy.calls[0].args[0].length ).toEqual( 2 );
+         expect( mySpy.calls[0].args[0][0].name ).toEqual( 'didDoSomethingSync.subTopic.andItWorked' );
+         expect( mySpy.calls[0].args[0][1].name ).toEqual( 'didDoSomethingSync.subTopic.andItDidntWork' );
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'EventBus unsubscribing', function() {
+
+      it( 'can take place for all subscribers', function() {
          var mySpy = jasmine.createSpy();
          this.eventBus_.subscribe( 'myEvent', mySpy );
 
@@ -604,6 +693,59 @@ define( [ 'event_bus' ], function( event_bus ) {
          jasmine.Clock.tick( 101 );
 
          expect( mySpy ).not.toHaveBeenCalled();
+
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      describe( 'as a specific subscriber', function() {
+
+         beforeEach( function() {
+            this.subscriberSpy_ = jasmine.createSpy();
+            this.eventBus_.subscribe( 'myEvent', this.subscriberSpy_ );
+            this.eventBus_.subscribe( 'myEvent.subitem', this.subscriberSpy_ );
+            this.eventBus_.subscribe( '.subitem', this.subscriberSpy_ );
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         afterEach( function( ) {
+            delete this.subscriberSpy_;
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'throws if the callback is no function', function() {
+            expect( this.eventBus_.unsubscribe ).toThrow();
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'removes it from all subscribed events', function() {
+
+            this.eventBus_.unsubscribe( this.subscriberSpy_ );
+
+            this.eventBus_.publish( 'myEvent' );
+            this.eventBus_.publish( 'myEvent.subitem' );
+
+            jasmine.Clock.tick( 101 );
+
+            expect( this.subscriberSpy_ ).not.toHaveBeenCalled();
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'ignores successive calls to unsubscribe', function() {
+
+            this.eventBus_.unsubscribe( this.subscriberSpy_ );
+            this.eventBus_.unsubscribe( this.subscriberSpy_ );
+
+            this.eventBus_.publish( 'myEvent' );
+
+            jasmine.Clock.tick( 101 );
+
+            expect( this.subscriberSpy_ ).not.toHaveBeenCalled();
+         } );
 
       } );
 
@@ -629,22 +771,51 @@ define( [ 'event_bus' ], function( event_bus ) {
 
    function addQMock( thisObject ) {
       var i = 0;
-      thisObject.Q_ =  {
+      thisObject.Q_ = {
          defer: function() {
 
-            var spies = {
-               resolve: jasmine.createSpy( 'resolve_' + i ),
-               reject: jasmine.createSpy( 'reject_' + i ),
-               then: jasmine.createSpy( 'then_' + i++ )
-            };
-
+            var done_;
+            var fail_;
+            var resolved_;
+            var rejected_;
             var deferred = {
-               resolve: spies.resolve,
-               reject: spies.reject,
+               resolve: function() {
+                  if( done_ ) {
+                     done_.apply( {}, arguments );
+                  }
+                  resolved_ = arguments;
+               },
+               reject: function() {
+                  if( fail_ ) {
+                     fail_.apply( {}, arguments );
+                  }
+                  rejected_ = arguments;
+               },
                promise: {
-                  then: spies.then
+                  then: function( done, fail ) {
+
+                     if( done.resolve && done.reject ) {
+                        done = done.resolve;
+                        fail = done.reject;
+                     }
+
+                     done_ = done;
+                     if( resolved_ && done_ ) {
+                        done_.apply( {}, resolved_ );
+                     }
+
+                     fail_ = fail;
+                     if( rejected_ && fail_ ) {
+                        fail_.apply( {}, rejected_ );
+                     }
+                  }
                }
             };
+
+            spyOn( deferred, "resolve" ).andCallThrough();
+            spyOn( deferred, "reject" ).andCallThrough();
+            spyOn( deferred.promise, "then" ).andCallThrough();
+
             // grant access to the original deferred from the returned promise
             deferred.promise.deferred = deferred;
 

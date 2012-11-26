@@ -22,6 +22,7 @@ define( [
 
    var PART_SEPARATOR = '.';
    var SUB_PART_SEPARATOR = '-';
+   var REQUEST_MATCHER = /^(.)(.*)Request(\..+)?$/;
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,6 +53,37 @@ define( [
 
    EventBus.prototype.setInspector = function( optionalInspector ) {
       this.inspector_ = _.isFunction( optionalInspector ) ? optionalInspector : defaultInspector;
+   };
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   /**
+    * Subscribes to a specific event.
+    *
+    * @param {String} eventName the name of the event to subscribe to
+    * @param {Function} subscriber a function to call when the event is published
+    * @param {String=} optionalSubscriberName a name for the subscriber (for debugging purpose)
+    */
+   EventBus.prototype.subscribe = function subscribe( eventName, subscriber, optionalSubscriberName ) {
+      if( !_.isString( eventName ) ) {
+         throw new Error( 'Expected eventName to be a String but got ' + eventName );
+      }
+      if( !_.isFunction( subscriber ) ) {
+         throw new Error( 'Expected listener to be a function but got ' + subscriber );
+      }
+
+      var subscriberName = _.isString( optionalSubscriberName ) ? optionalSubscriberName : '';
+      this.subscribers_.push( {
+         name: eventName,
+         subscriber: subscriber,
+         subscriberName: subscriberName
+      } );
+
+      this.inspector_( {
+         action: 'subscribe',
+         source: subscriberName,
+         event: eventName
+      } );
    };
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,36 +124,89 @@ define( [
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
    /**
-    * Subscribes to a specific event.
+    * Asynchronously publishes an event on the event bus.
     *
-    * @param {String} eventName the name of the event to subscribe to
-    * @param {Function} subscriber a function to call when the event is published
-    * @param {String=} optionalSubscriberName a name for the subscriber (for debugging purpose)
+    * @param {String} eventName the name of the event to publish
+    * @param {Object=} optionalData data to send as payload with the event
+    * @param {String=} optionalPublisherName a name for the publisher (for debugging purpose)
+    * @return {Promise}
     */
-   EventBus.prototype.subscribe = function subscribe( eventName, subscriber, optionalSubscriberName ) {
+   EventBus.prototype.publishAndGatherReplies = function publishAndGatherReplies( eventName,
+                                                                                  optionalData,
+                                                                                  optionalPublisherName ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
+
+      var matches = REQUEST_MATCHER.exec( eventName );
+      if( !matches ) {
+         throw new Error( 'Expected eventName to end with "Request" but got ' + eventName );
+      }
+
+      var eventNameSuffix = matches[1].toUpperCase() + matches[2];
+      if( matches[ 3 ] ) {
+         eventNameSuffix += matches[ 3 ];
+      }
+      var deferred = Q_.defer();
+      var givenWillResponses = 0;
+      var givenDidResponses = [];
+      var cycleNotFinished = false;
+
+      function willCollector() {
+         ++givenWillResponses;
+      }
+      this.subscribe( 'will' + eventNameSuffix, willCollector );
+
+      function didCollector( event ) {
+         givenDidResponses.push( event );
+         if( givenWillResponses === givenDidResponses.length && cycleNotFinished ) {
+            finish();
+         }
+      }
+      this.subscribe( 'did' + eventNameSuffix, didCollector );
+
+      this.publish( eventName, optionalData, optionalPublisherName ).then( function() {
+         if( givenWillResponses === givenDidResponses.length ) {
+            // either there was no will or all did reponses were already given in the same cycle as the will
+            finish();
+         }
+         else {
+            cycleNotFinished = true;
+         }
+      } );
+
+      var self = this;
+      function finish() {
+         self.unsubscribe( willCollector );
+         self.unsubscribe( didCollector );
+         deferred.resolve( givenDidResponses );
+      }
+
+      return deferred.promise;
+   };
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   /**
+    * Unsubscribes a subscriber from all subscribed events.
+    *
+    * @param {Function} subscriber the function to unsubscribe
+    */
+   EventBus.prototype.unsubscribe = function( subscriber ) {
       if( !_.isFunction( subscriber ) ) {
          throw new Error( 'Expected listener to be a function but got ' + subscriber );
       }
 
-      var subscriberName = _.isString( optionalSubscriberName ) ? optionalSubscriberName : '';
-      this.subscribers_.push( {
-         name: eventName,
-         subscriber: subscriber,
-         subscriberName: subscriberName
-      } );
-
-      this.inspector_( {
-         action: 'subscribe',
-         source: subscriberName,
-         event: eventName
+      this.subscribers_ = _.filter( this.subscribers_, function( subscriberItem ) {
+         return subscriberItem.subscriber !== subscriber;
       } );
    };
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+   /**
+    * Removes all subscribers from the event bus.
+    */
    EventBus.prototype.unsubscribeAll = function unsubscribeAll() {
       this.subscribers_ = [];
    };
@@ -255,7 +340,7 @@ define( [
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function defaultErrorHandler( e, eventItem, subscriberItem ) {
+   function defaultErrorHandler( error, eventItem, subscriberItem ) {
       /*global console*/
       if( !console || !_.isFunction( console.log ) ) {
          return;
@@ -264,9 +349,9 @@ define( [
       var errFunc = _.isFunction( console.error ) ? 'error' : 'log';
       console[ errFunc ]( 'error while calling subscriber for event ' + eventItem.name +
          ' (subscribed to: ' + subscriberItem.name + ')' );
-      console.log( e.message );
-      if( e.stack ) {
-         console.log( e.stack );
+      console.log( error.message );
+      if( error.stack ) {
+         console.log( error.stack );
       }
    }
 

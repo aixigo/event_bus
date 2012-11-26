@@ -155,7 +155,7 @@ define( [
       function willCollector() {
          ++givenWillResponses;
       }
-      this.subscribe( 'will' + eventNameSuffix, willCollector );
+      this.subscribe( 'will' + eventNameSuffix, willCollector, optionalPublisherName );
 
       function didCollector( event ) {
          givenDidResponses.push( event );
@@ -163,7 +163,7 @@ define( [
             finish();
          }
       }
-      this.subscribe( 'did' + eventNameSuffix, didCollector );
+      this.subscribe( 'did' + eventNameSuffix, didCollector, optionalPublisherName );
 
       this.publish( eventName, optionalData, optionalPublisherName ).then( function() {
          if( givenWillResponses === givenDidResponses.length ) {
@@ -197,8 +197,19 @@ define( [
          throw new Error( 'Expected listener to be a function but got ' + subscriber );
       }
 
+      var inspector = this.inspector_;
       this.subscribers_ = _.filter( this.subscribers_, function( subscriberItem ) {
-         return subscriberItem.subscriber !== subscriber;
+         if( subscriberItem.subscriber !== subscriber ) {
+            return false;
+         }
+
+         inspector( {
+            action: 'unsubscribe',
+            source: subscriberItem.subscriberName,
+            event: subscriberItem.name
+         } );
+
+         return true;
       } );
    };
 

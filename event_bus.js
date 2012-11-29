@@ -189,6 +189,8 @@ define( [
    /**
     * Unsubscribes a subscriber from all subscribed events.
     *
+    * NEEDS FIX B: Currently this only removes the subscriber for future events but ignores queued events
+    *
     * @param {Function} subscriber the function to unsubscribe
     */
    EventBus.prototype.unsubscribe = function( subscriber ) {
@@ -267,6 +269,9 @@ define( [
                         self.currentCycle_ = eventItem.cycleId;
                         self.publish( eventName, optionalData );
                         self.currentCycle_ = -1;
+                     },
+                     unsubscribe: function() {
+                        self.unsubscribe( subscriberItem.subscriber );
                      }
                   } );
 

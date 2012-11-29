@@ -493,6 +493,23 @@ define( [ 'event_bus' ], function( event_bus ) {
          expect( mySpy ).toHaveBeenCalled();
       } );
 
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'provides a way to directly unsubscribe the called subscriber from this event', function() {
+         var calls = 0;
+         this.eventBus_.subscribe( 'myEvent', function( event, actions ) {
+            ++calls;
+            actions.unsubscribe();
+         } );
+         this.eventBus_.publish( 'myEvent' );
+         jasmine.Clock.tick( 101 );
+
+         this.eventBus_.publish( 'myEvent' );
+         jasmine.Clock.tick( 101 );
+
+         expect( calls ).toEqual( 1 );
+      } );
+
    } );
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

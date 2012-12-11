@@ -691,6 +691,20 @@ define( [ 'event_bus' ], function( event_bus ) {
          expect( mySpy.calls[0].args[0][1].name ).toEqual( 'didDoSomethingSync.subTopic.andItDidntWork' );
       } );
 
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'resolves even if no one answered the request', function() {
+         var eventBus = this.eventBus_;
+         var mySpy = jasmine.createSpy( 'unknown request spy' );
+
+         eventBus.publishAndGatherReplies( 'myUnknownRequest' ).then( mySpy );
+
+         jasmine.Clock.tick( 101 );
+
+         expect( mySpy ).toHaveBeenCalled();
+         expect( mySpy.calls[0].args[0].length ).toEqual( 0 );
+      } );
+
    } );
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

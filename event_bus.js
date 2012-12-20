@@ -110,7 +110,7 @@ define( [
 
       var eventItem = {
          name: eventName,
-         data: arguments.length > 1 ? optionalData : {},
+         data: _.isUndefined( optionalData ) ? {} : optionalData,
          publishedDeferred: Q_.defer(),
          cycleId: this.currentCycle_ === -1 ? this.cycleCounter_++ : this.currentCycle_,
          publisherName: _.isString( optionalPublisherName ) ? optionalPublisherName : ''

@@ -43,9 +43,15 @@ define( [
 
    describe( 'An EventBus instance', function() {
 
-      it( 'calls a directly matching subscriber not during the current runloop', function() {
-         var mySpy = jasmine.createSpy();
+      var mySpy;
 
+      beforeEach( function() {
+         mySpy = jasmine.createSpy();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'calls a directly matching subscriber not during the current runloop', function() {
          eventBus.subscribe( 'message.subject', mySpy );
          eventBus.publish( 'message.subject' );
 
@@ -55,12 +61,10 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'eventually calls a directly matching subscriber', function() {
-         var mySpy = jasmine.createSpy();
-
          eventBus.subscribe( 'message.subject', mySpy );
          eventBus.publish( 'message.subject' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -68,12 +72,10 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'never calls a subscriber that does not match', function() {
-         var mySpy = jasmine.createSpy();
-
          eventBus.subscribe( 'message.other_subject', mySpy );
          eventBus.publish( 'message.subject' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).not.toHaveBeenCalled();
       } );
@@ -93,19 +95,13 @@ define( [
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      afterEach( function() {
-         eventBus.setErrorHandler( null );
-      } );
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
       it( 'can be handled by a custom error handler', function() {
          eventBus.subscribe( 'myEvent', function() {
             throw new Error( 'this is an error' );
          } );
          eventBus.publish( 'myEvent' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( errorHandlerSpy ).toHaveBeenCalled();
       } );
@@ -121,7 +117,7 @@ define( [
          eventBus.subscribe( 'myEvent', mySpy );
          eventBus.publish( 'myEvent' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -140,7 +136,7 @@ define( [
          eventBus.publish( 'myEvent.2' );
          eventBus.publish( 'myEvent.3' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mediatorSpy ).toHaveBeenCalled();
          expect( mediatorSpy.calls[0].args[0][0].name ).toEqual( 'myEvent.1' );
@@ -164,7 +160,7 @@ define( [
          eventBus.subscribe( 'myEvent.2', mySpy );
          eventBus.publish( 'myEvent.1' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
          expect( mySpy.calls[0].args[0].data.key ).toEqual( 'val' );
@@ -193,7 +189,7 @@ define( [
          eventBus.publish( 'myEvent.2' );
          eventBus.publish( 'myEvent.3' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy1 ).toHaveBeenCalled();
          expect( mySpy2 ).not.toHaveBeenCalled();
@@ -211,12 +207,6 @@ define( [
       beforeEach( function() {
          inspectorSpy = jasmine.createSpy( 'inspector' );
          eventBus.setInspector( inspectorSpy );
-      } );
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      afterEach( function() {
-         eventBus.setInspector( null );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -256,7 +246,7 @@ define( [
             some: 'payload'
          }, 'publisherX' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( inspectorSpy ).toHaveBeenCalled();
          expect( inspectorSpy.calls[3].args[0].action ).toEqual( 'deliver' );
@@ -278,9 +268,9 @@ define( [
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   describe( 'Publishing', function() {
+   describe( 'Publishing without providing an event name', function() {
 
-      it( 'throws an error if the event name is missing', function() {
+      it( 'throws an error', function() {
          expect( eventBus.publish ).toThrow();
       } );
 
@@ -288,9 +278,9 @@ define( [
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   describe( 'Subscribing', function() {
+   describe( 'Subscribing without providing a callback', function() {
 
-      it( 'throws an error when called without event name or subscriber callback', function() {
+      it( 'throws an error', function() {
          expect( eventBus.subscribe ).toThrow();
          expect( function() {
             eventBus.subscribe( '' );
@@ -324,8 +314,7 @@ define( [
 
       it( 'that is resolved when there was at least one matching subscriber', function() {
          eventBus.subscribe( 'myEvent', function() {} );
-         var promise = eventBus.publish( 'myEvent' );
-         promise.then( mySpy );
+         eventBus.publish( 'myEvent' ).then( mySpy );
 
          jasmine.Clock.tick( 1 );
 
@@ -341,13 +330,11 @@ define( [
          } );
 
          eventBus.subscribe( 'subEvent', function() {
-
             expect( mySpy ).not.toHaveBeenCalled();
             subEventSubscriberCalled = true;
          } );
 
-         var promise = eventBus.publish( 'event' );
-         promise.then( mySpy );
+         eventBus.publish( 'event' ).then( mySpy );
 
          jasmine.Clock.tick( 1 );
 
@@ -379,7 +366,7 @@ define( [
 
          eventBus.publish( 'myEvent' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -389,7 +376,7 @@ define( [
          eventBus.subscribe( 'firstLevel.secondLevel', mySpy );
          eventBus.publish( 'firstLevel' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).not.toHaveBeenCalled();
       } );
@@ -413,7 +400,7 @@ define( [
             'myString': 'Hello'
          } );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -425,7 +412,7 @@ define( [
 
          eventBus.publish( 'myEvent' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -444,7 +431,7 @@ define( [
             'key': 'val'
          } );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -455,7 +442,7 @@ define( [
          eventBus.publish( 'myEvent' );
          eventBus.publish( 'myEvent' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy.calls[ 0 ].args[ 0 ].cycleId ).not.toEqual( mySpy.calls[ 1 ].args[ 1 ].cycleId );
       } );
@@ -473,7 +460,7 @@ define( [
          var mySpy = jasmine.createSpy();
          eventBus.subscribe( 'myResponse', mySpy );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
          expect( mySpy.calls[ 0 ].args[ 0 ].cycleId ).toEqual( cycleId );
       } );
 
@@ -488,7 +475,7 @@ define( [
          eventBus.subscribe( 'myEvent', mySpy );
          eventBus.publish( 'myEvent' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy.calls[ 0 ].args.length ).toBe( 2 );
          expect( mySpy.calls[ 0 ].args[ 1 ] ).toBeDefined();
@@ -505,7 +492,7 @@ define( [
          var mySpy = jasmine.createSpy();
          eventBus.subscribe( 'myResponse', mySpy );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -519,10 +506,10 @@ define( [
             actions.unsubscribe();
          } );
          eventBus.publish( 'myEvent' );
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          eventBus.publish( 'myEvent' );
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( calls ).toEqual( 1 );
       } );
@@ -533,12 +520,19 @@ define( [
 
    describe( 'Subscribe allows wildcards', function() {
 
+      var mySpy;
+
+      beforeEach( function() {
+         mySpy = jasmine.createSpy();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
       it( 'at the end of the event name', function() {
-         var mySpy = jasmine.createSpy();
          eventBus.subscribe( 'firstLevel.secondLevel', mySpy );
          eventBus.publish( 'firstLevel.secondLevel.thirdLevel' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -546,11 +540,10 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'at the beginning of the event name', function() {
-         var mySpy = jasmine.createSpy();
          eventBus.subscribe( '.secondLevel.thirdLevel', mySpy );
          eventBus.publish( 'firstLevel.secondLevel.thirdLevel' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -558,11 +551,10 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'anywhere in the event name', function() {
-         var mySpy = jasmine.createSpy();
          eventBus.subscribe( 'firstLevel..thirdLevel', mySpy );
          eventBus.publish( 'firstLevel.secondLevel.thirdLevel' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -570,11 +562,10 @@ define( [
       ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'as the empty string in the subscriber', function() {
-         var mySpy = jasmine.createSpy();
          eventBus.subscribe( '', mySpy );
          eventBus.publish( 'myEvent' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -585,12 +576,19 @@ define( [
 
    describe( 'Subscribe allows inner wildcards', function() {
 
+      var mySpy;
+
+      beforeEach( function() {
+         mySpy = jasmine.createSpy();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
       it( 'using minus', function() {
-         var mySpy = jasmine.createSpy();
          eventBus.subscribe( 'firstLevel.secondLevel.thirdLevel', mySpy );
          eventBus.publish( 'firstLevel-here.secondLevel.thirdLevel' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -598,11 +596,10 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'using minus combined with wildcards', function() {
-         var mySpy = jasmine.createSpy();
          eventBus.subscribe( 'firstLevel..thirdLevel', mySpy );
          eventBus.publish( 'firstLevel.secondLevel.thirdLevel-here' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -610,11 +607,10 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'using minus with wildcards only', function() {
-         var mySpy = jasmine.createSpy();
          eventBus.subscribe( 'firstLevel', mySpy );
          eventBus.publish( 'firstLevel.secondLevel.thirdLevel-here' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
       } );
@@ -625,7 +621,10 @@ define( [
 
    describe( 'An event bus supports a request-will-did pattern', function() {
 
+      var mySpy;
+
       beforeEach( function() {
+         mySpy = jasmine.createSpy();
          eventBus.subscribe( 'doSomethingAsyncRequest', function() {
             eventBus.publish( 'willDoSomethingAsync' );
             window.setTimeout( function() {
@@ -661,10 +660,9 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'whose promise is resolved only after all will-did replies were given asynchronously', function() {
-         var mySpy = jasmine.createSpy( 'request chain async' );
          eventBus.publishAndGatherReplies( 'doSomethingAsyncRequest' ).then( mySpy );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 11 );
 
          expect( mySpy ).toHaveBeenCalled();
          expect( mySpy.calls[0].args[0].length ).toEqual( 1 );
@@ -674,10 +672,9 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'whose promise is resolved only after all will-did replies were given synchronously', function() {
-         var mySpy = jasmine.createSpy( 'request chain sync' );
          eventBus.publishAndGatherReplies( 'doSomethingSyncRequest' ).then( mySpy );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
          expect( mySpy.calls[0].args[0].length ).toEqual( 1 );
@@ -687,8 +684,6 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'only listens to did/will answers for the given subject', function() {
-         var mySpy = jasmine.createSpy( 'request chain' );
-
          eventBus.subscribe( 'doSomethingSyncRequest', function() {
             eventBus.publish( 'willDoSomethingSync.subTopic' );
             eventBus.publish( 'didDoSomethingSync.subTopic.andItDidntWork' );
@@ -696,7 +691,7 @@ define( [
 
          eventBus.publishAndGatherReplies( 'doSomethingSyncRequest.subTopic' ).then( mySpy );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
          expect( mySpy.calls[0].args[0].length ).toEqual( 2 );
@@ -707,11 +702,9 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'resolves even if no one answered the request', function() {
-         var mySpy = jasmine.createSpy( 'unknown request spy' );
-
          eventBus.publishAndGatherReplies( 'myUnknownRequest' ).then( mySpy );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
          expect( mySpy.calls[0].args[0].length ).toEqual( 0 );
@@ -731,7 +724,7 @@ define( [
 
          eventBus.publish( 'myEvent' );
 
-         jasmine.Clock.tick( 101 );
+         jasmine.Clock.tick( 1 );
 
          expect( mySpy ).not.toHaveBeenCalled();
 
@@ -760,13 +753,12 @@ define( [
          /////////////////////////////////////////////////////////////////////////////////////////////////////
 
          it( 'removes it from all subscribed events', function() {
-
             eventBus.unsubscribe( subscriberSpy );
 
             eventBus.publish( 'myEvent' );
             eventBus.publish( 'myEvent.subitem' );
 
-            jasmine.Clock.tick( 101 );
+            jasmine.Clock.tick( 1 );
 
             expect( subscriberSpy ).not.toHaveBeenCalled();
          } );
@@ -774,13 +766,12 @@ define( [
          /////////////////////////////////////////////////////////////////////////////////////////////////////
 
          it( 'ignores successive calls to unsubscribe', function() {
-
             eventBus.unsubscribe( subscriberSpy );
             eventBus.unsubscribe( subscriberSpy );
 
             eventBus.publish( 'myEvent' );
 
-            jasmine.Clock.tick( 101 );
+            jasmine.Clock.tick( 1 );
 
             expect( subscriberSpy ).not.toHaveBeenCalled();
          } );

@@ -20,8 +20,9 @@
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 define( [
-   'lib/underscore/underscore'
-], function( _ ) {
+   'lib/underscore/underscore',
+   'lib/utilities/object'
+], function( _, objUtils ) {
    'use strict';
 
    var Q_;
@@ -89,6 +90,7 @@ define( [
       this.inspector_( {
          action: 'subscribe',
          source: subscriberName,
+         target: '-',
          event: eventName
       } );
    };
@@ -99,27 +101,29 @@ define( [
     * Asynchronously publishes an event on the event bus.
     *
     * @param {String} eventName the name of the event to publish
-    * @param {Object=} optionalData data to send as payload with the event
-    * @param {String=} optionalPublisherName a name for the publisher (for debugging purpose)
+    * @param {Object=} optionalEvent the event to publish
     * @return {Promise}
     */
-   EventBus.prototype.publish = function publish( eventName, optionalData, optionalPublisherName ) {
+   EventBus.prototype.publish = function publish( eventName, optionalEvent ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
 
-      var eventItem = {
-         name: eventName,
-         data: _.isUndefined( optionalData ) ? {} : optionalData,
-         publishedDeferred: Q_.defer(),
-         cycleId: this.currentCycle_ === -1 ? this.cycleCounter_++ : this.currentCycle_,
-         publisherName: _.isString( optionalPublisherName ) ? optionalPublisherName : ''
-      };
+      var item = _.isObject( optionalEvent ) ? _.clone( optionalEvent ) : {};
+      var eventItem = _.defaults( item, {
+            data: {},
+            cycleId: this.currentCycle_ > -1 ? this.currentCycle_ : this.cycleCounter_++,
+            sender: null,
+            initiator: null
+         } );
+      eventItem.publishedDeferred = Q_.defer(),
+      eventItem.name = eventName;
       enqueueEvent( this, eventItem );
 
       this.inspector_( {
          action: 'publish',
-         source: eventItem.publisherName,
+         source: eventItem.sender,
+         target: '-',
          event: eventName,
          data: eventItem.data,
          cycleId: eventItem.cycleId
@@ -134,12 +138,12 @@ define( [
     * Asynchronously publishes an event on the event bus.
     *
     * @param {String} eventName the name of the event to publish
-    * @param {Object=} optionalData data to send as payload with the event
+    * @param {Object=} optionalEvent the event to publish
     * @param {String=} optionalPublisherName a name for the publisher (for debugging purpose)
     * @return {Promise}
     */
    EventBus.prototype.publishAndGatherReplies = function publishAndGatherReplies( eventName,
-                                                                                  optionalData,
+                                                                                  optionalEvent,
                                                                                   optionalPublisherName ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
@@ -162,7 +166,7 @@ define( [
       function willCollector() {
          ++givenWillResponses;
       }
-      this.subscribe( 'will' + eventNameSuffix, willCollector, optionalPublisherName );
+      this.subscribe( 'will' + eventNameSuffix, willCollector, optionalEvent ? optionalEvent.sender : undefined );
 
       function didCollector( event ) {
          givenDidResponses.push( event );
@@ -170,9 +174,9 @@ define( [
             finish();
          }
       }
-      this.subscribe( 'did' + eventNameSuffix, didCollector, optionalPublisherName );
+      this.subscribe( 'did' + eventNameSuffix, didCollector, optionalEvent ? optionalEvent.sender : undefined );
 
-      this.publish( eventName, optionalData, optionalPublisherName ).then( function() {
+      this.publish( eventName, optionalEvent ).then( function() {
          if( givenWillResponses === givenDidResponses.length ) {
             // either there was no will or all did reponses were already given in the same cycle as the will
             return finish();
@@ -214,6 +218,7 @@ define( [
          inspector( {
             action: 'unsubscribe',
             source: subscriberItem.subscriberName,
+            target: '-',
             event: subscriberItem.name
          } );
          return false;
@@ -222,24 +227,14 @@ define( [
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   /**
-    * Removes all subscribers from the event bus.
-    */
-   EventBus.prototype.unsubscribeAll = function unsubscribeAll() {
-      this.subscribers_ = [];
-   };
-
-   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-
    function enqueueEvent( self, eventItem ) {
       if( self.eventQueue_.length === 0 ) {
          nextTick_( function() {
-            var subscribers = _.clone( self.subscribers_ );
             var queuedEvents = self.eventQueue_;
 
             self.eventQueue_ = [];
 
-            processWaitingDeferreds( self, processQueue( self, queuedEvents, subscribers ) );
+            processWaitingDeferreds( self, processQueue( self, queuedEvents ) );
          } );
       }
       self.eventQueue_.push( eventItem );
@@ -247,53 +242,37 @@ define( [
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function processQueue( self, queuedEvents, subscribers ) {
+   function processQueue( self, queuedEvents ) {
+      return _.map( self.mediator_( queuedEvents ), function( eventItem ) {
 
-      queuedEvents = self.mediator_( queuedEvents );
+         var deferred = eventItem.publishedDeferred;
+         delete eventItem.publishedDeferred;
 
-      var deferreds = _.map( queuedEvents, function( eventItem ) {
+         _.each( findSubscribers( self, eventItem.name ), function( subscriberItem ) {
+            self.inspector_( {
+               action: 'deliver',
+               source: eventItem.sender,
+               target: subscriberItem.subscriberName,
+               event: eventItem.name,
+               subscribedTo: subscriberItem.name,
+               cycleId: eventItem.cycleId
+            } );
 
-         var eventName = eventItem.name;
-         _.each( subscribers, function( subscriberItem ) {
-
-            if( isValidSubscriber( subscriberItem, eventName ) ) {
-               self.inspector_( {
-                  action: 'deliver',
-                  source: eventItem.publisherName,
-                  target: subscriberItem.subscriberName,
-                  event: eventName,
-                  subscribedTo: subscriberItem.name,
-                  cycleId: eventItem.cycleId
+            try {
+               subscriberItem.subscriber( eventItem, {
+                  unsubscribe: function() {
+                     self.unsubscribe( subscriberItem.subscriber );
+                  }
                } );
 
-               try {
-                  subscriberItem.subscriber( {
-                     name: eventItem.name,
-                     data: _.clone( eventItem.data ),
-                     cycleId: eventItem.cycleId || 0
-                  }, {
-                     publishResponse: function( eventName, optionalData ) {
-                        self.currentCycle_ = eventItem.cycleId;
-                        self.publish( eventName, optionalData );
-                        self.currentCycle_ = -1;
-                     },
-                     unsubscribe: function() {
-                        self.unsubscribe( subscriberItem.subscriber );
-                     }
-                  } );
-
-               }
-               catch( e ) {
-                  self.errorHandler_( e, eventItem, subscriberItem );
-               }
             }
-
+            catch( e ) {
+               self.errorHandler_( e, eventItem, subscriberItem );
+            }
          } );
 
-         return eventItem.publishedDeferred;
+         return deferred;
       } );
-
-      return deferreds;
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -313,6 +292,14 @@ define( [
          } );
          self.waitingDeferreds_ = [];
       }
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function findSubscribers( self, eventName ) {
+      return _.filter( self.subscribers_, function( subscriberItem ) {
+         return isValidSubscriber( subscriberItem, eventName );
+      } );
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

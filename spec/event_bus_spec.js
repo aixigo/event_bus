@@ -162,8 +162,6 @@ define( [
 
          jasmine.Clock.tick( 1 );
 
-         console.log( mySpy.calls[0].args[0] );
-
          expect( mySpy ).toHaveBeenCalled();
          expect( mySpy.calls[0].args[0].data.key ).toEqual( 'val' );
       } );
@@ -421,38 +419,6 @@ define( [
          eventBus.publish( 'myEvent' );
 
          jasmine.Clock.tick( 1 );
-      } );
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      describe( 'if the browser supports freezing of objects', function() {
-
-         if( typeof Object.freeze !== 'function' ) {
-            return;
-         }
-
-         it( 'should prevent from manipulating data by other subscribers', function() {
-            eventBus.subscribe( 'myEvent', function( event ) {
-               expect( function() {
-                  event.data.key = 'evil';
-               } ).toThrow();
-               expect( function() {
-                  event.data.withObj.key = 'evil';
-               } ).toThrow();
-            } );
-
-            eventBus.publish( 'myEvent', {
-               data: {
-                  key: 'val',
-                  withObj: {
-                     key: 'hihi'
-                  }
-               }
-            } );
-
-            jasmine.Clock.tick( 1 );
-         } );
-
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////

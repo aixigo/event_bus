@@ -91,7 +91,8 @@ define( [
          action: 'subscribe',
          source: subscriberName,
          target: '-',
-         event: eventName
+         event: eventName,
+         cycleId: this.currentCycle_
       } );
    };
 
@@ -139,12 +140,9 @@ define( [
     *
     * @param {String} eventName the name of the event to publish
     * @param {Object=} optionalEvent the event to publish
-    * @param {String=} optionalPublisherName a name for the publisher (for debugging purpose)
     * @return {Promise}
     */
-   EventBus.prototype.publishAndGatherReplies = function publishAndGatherReplies( eventName,
-                                                                                  optionalEvent,
-                                                                                  optionalPublisherName ) {
+   EventBus.prototype.publishAndGatherReplies = function publishAndGatherReplies( eventName, optionalEvent ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
@@ -159,30 +157,40 @@ define( [
          eventNameSuffix += matches[ 3 ];
       }
       var deferred = Q_.defer();
-      var givenWillResponses = 0;
+      var willWaitingForDid = [];
       var givenDidResponses = [];
-      var cycleNotFinished = false;
+      var cycleFinished = false;
 
-      function willCollector() {
-         ++givenWillResponses;
+      function willCollector( event ) {
+         if( typeof event.sender !== 'string' ) {
+            throw new Error( 'A resopnse with will to a request-event must contain a sender.' );
+         }
+
+         willWaitingForDid.push( event.sender );
       }
       this.subscribe( 'will' + eventNameSuffix, willCollector, optionalEvent ? optionalEvent.sender : undefined );
 
       function didCollector( event ) {
          givenDidResponses.push( event );
-         if( givenWillResponses === givenDidResponses.length && cycleNotFinished ) {
+
+         var senderIndex = willWaitingForDid.indexOf( event.sender );
+         if( senderIndex !== -1 ) {
+            willWaitingForDid.splice( senderIndex, 1 );
+         }
+
+         if( willWaitingForDid.length === 0 && cycleFinished ) {
             finish();
          }
       }
       this.subscribe( 'did' + eventNameSuffix, didCollector, optionalEvent ? optionalEvent.sender : undefined );
 
       this.publish( eventName, optionalEvent ).then( function() {
-         if( givenWillResponses === givenDidResponses.length ) {
+         if( willWaitingForDid.length === 0 ) {
             // either there was no will or all did reponses were already given in the same cycle as the will
             return finish();
          }
 
-         cycleNotFinished = true;
+         cycleFinished = true;
       } );
 
       var self = this;
@@ -209,17 +217,18 @@ define( [
          throw new Error( 'Expected listener to be a function but got ' + subscriber );
       }
 
-      var inspector = this.inspector_;
+      var self = this;
       this.subscribers_ = _.filter( this.subscribers_, function( subscriberItem ) {
          if( subscriberItem.subscriber !== subscriber ) {
             return true;
          }
 
-         inspector( {
+         self.inspector_( {
             action: 'unsubscribe',
             source: subscriberItem.subscriberName,
             target: '-',
-            event: subscriberItem.name
+            event: subscriberItem.name,
+            cycleId: self.currentCycle_
          } );
          return false;
       } );
@@ -244,6 +253,8 @@ define( [
 
    function processQueue( self, queuedEvents ) {
       return _.map( self.mediator_( queuedEvents ), function( eventItem ) {
+
+         self.currentCycle_ = eventItem.cycleId;
 
          var deferred = eventItem.publishedDeferred;
          delete eventItem.publishedDeferred;
@@ -270,6 +281,8 @@ define( [
                self.errorHandler_( e, eventItem, subscriberItem );
             }
          } );
+
+         self.currentCycle_ = -1;
 
          return deferred;
       } );

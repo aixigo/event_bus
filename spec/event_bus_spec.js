@@ -579,19 +579,30 @@ define( [
 
       beforeEach( function() {
          mySpy = jasmine.createSpy();
+         eventBus.subscribe( 'doSomethingWrong', function() {
+            eventBus.publish( 'willDoSomethingWrong' );
+            eventBus.publish( 'didDoSomethingWrong' );
+         } );
          eventBus.subscribe( 'doSomethingAsyncRequest', function() {
-            eventBus.publish( 'willDoSomethingAsync' );
+            eventBus.publish( 'willDoSomethingAsync', { sender: 'asyncSender' } );
             window.setTimeout( function() {
-               eventBus.publish( 'didDoSomethingAsync.andItWorked' );
+               eventBus.publish( 'didDoSomethingAsync.andItWorked', { sender: 'asyncSender' } );
             }, 10 );
          } );
          eventBus.subscribe( 'doSomethingSyncRequest', function() {
-            eventBus.publish( 'willDoSomethingSync' );
-            eventBus.publish( 'didDoSomethingSync.andItWorked' );
+            eventBus.publish( 'willDoSomethingSync', { sender: 'syncSender' }  );
+            eventBus.publish( 'didDoSomethingSync.andItWorked', { sender: 'syncSender' }  );
          } );
          eventBus.subscribe( 'doSomethingSyncRequest.subTopic', function() {
-            eventBus.publish( 'willDoSomethingSync.subTopic' );
-            eventBus.publish( 'didDoSomethingSync.subTopic.andItWorked' );
+            eventBus.publish( 'willDoSomethingSync.subTopic', { sender: 'syncSender' }  );
+            eventBus.publish( 'didDoSomethingSync.subTopic.andItWorked', { sender: 'syncSender' }  );
+         } );
+         eventBus.subscribe( 'doSomethingWithoutWillRequest', function() {
+            eventBus.publish( 'willDoSomethingWithoutWill', { sender: 'asyncSender' } );
+            window.setTimeout( function() {
+               eventBus.publish( 'didDoSomethingWithoutWill.andItWorked', { sender: 'asyncSender' } );
+            }, 10 );
+            eventBus.publish( 'didDoSomethingWithoutWill.andItWorked', { sender: 'syncSender' }  );
          } );
       } );
 
@@ -600,6 +611,14 @@ define( [
       it( 'throws when the event name doesn\'t end with "Request"', function() {
          expect( function() {
             eventBus.publishAndGatherReplies( 'wronglyNamedEvent' );
+         } ).toThrow();
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'throws when a "will"-response comes without sender', function() {
+         expect( function() {
+            eventBus.publishAndGatherReplies( 'doSomethingWrong' );
          } ).toThrow();
       } );
 
@@ -634,13 +653,24 @@ define( [
          expect( mySpy.calls[0].args[0].length ).toEqual( 1 );
          expect( mySpy.calls[0].args[0][0].name ).toEqual( 'didDoSomethingSync.andItWorked' );
       } );
+      
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+      
+      it( 'whose promise is resolved after synchronous dids without wills, combined with asynchronous dids', function() {
+         eventBus.publishAndGatherReplies( 'doSomethingWithoutWillRequest' ).then( mySpy );
+
+         jasmine.Clock.tick( 11 );
+
+         expect( mySpy ).toHaveBeenCalled();
+         expect( mySpy.calls[0].args[0].length ).toEqual( 2 );
+      } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'only listens to did/will answers for the given subject', function() {
          eventBus.subscribe( 'doSomethingSyncRequest', function() {
-            eventBus.publish( 'willDoSomethingSync.subTopic' );
-            eventBus.publish( 'didDoSomethingSync.subTopic.andItDidntWork' );
+            eventBus.publish( 'willDoSomethingSync.subTopic', { sender: 'syncSender' } );
+            eventBus.publish( 'didDoSomethingSync.subTopic.andItDidntWork', { sender: 'syncSender' } );
          } );
 
          eventBus.publishAndGatherReplies( 'doSomethingSyncRequest.subTopic' ).then( mySpy );

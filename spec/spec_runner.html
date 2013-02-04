@@ -24,17 +24,14 @@
 
          // List the tests you want to execute relative to this file combined with the baseUrl configured for
          // require js below.
-         window.tests = [ 'spec/event_bus_spec' ];
+         window.tests = [ 'lib/event_bus/spec/event_bus_spec' ];
 
          // Configure require js for this specific module. It is recommended to place this file within a sub
          // folder called 'spec' within the module. Hence the baseUrl should point one folder up to the
          // main folder of this module (most probably '../').
          // Optionally it is necessary to configure the paths to all modules required by the module under test.
          require.config({
-            baseUrl: '../',
-            paths: {
-               'lib/underscore/underscore': '../underscore/underscore'
-            },
+            baseUrl: '../../../',
             shim: {
                'lib/underscore/underscore': {
                   exports: '_',

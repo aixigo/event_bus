@@ -2,7 +2,7 @@
       "http://www.w3.org/TR/html4/loose.dtd">
 <html>
 <head>
-   <title>Jasmine Spec Runner</title>
+   <title>EventBus Specification</title>
 
    <script type="text/javascript">
       (function() {
@@ -17,35 +17,7 @@
       })();
    </script>
 
-   <script type="text/javascript">
-      (function() {
-
-         // BEGIN: Inserted for specific module
-
-         // List the tests you want to execute relative to this file combined with the baseUrl configured for
-         // require js below.
-         window.tests = [ 'lib/event_bus/spec/event_bus_spec' ];
-
-         // Configure require js for this specific module. It is recommended to place this file within a sub
-         // folder called 'spec' within the module. Hence the baseUrl should point one folder up to the
-         // main folder of this module (most probably '../').
-         // Optionally it is necessary to configure the paths to all modules required by the module under test.
-         require.config({
-            baseUrl: '../../../',
-            shim: {
-               'lib/underscore/underscore': {
-                  exports: '_',
-                  init: function() {
-                     return this._.noConflict();
-                  }
-               }
-            }
-         });
-
-         // END: Inserted for specific module
-
-      })();
-   </script>
+   <script type="text/javascript" src="spec_runner.js"></script>
 
    <script type="text/javascript">
       (function() {
@@ -70,12 +42,26 @@
 
             require( window.tests, execJasmine );
 
-            // only chrome can handle focus events and reload the window reasonable
             if( navigator.userAgent.indexOf( 'Chrome/' ) !== -1 ) {
-               window.onfocus = function() {
-                  // reload the page when the browser window gets the focus
-                  window.location.reload();
+               // only chrome can handle focus events and reload the window reasonable
+               var key = 'specRunnerRefreshOnFocus';
+               if( !( key in localStorage ) ) {
+                  localStorage[ key ] = true;
                }
+               document.getElementById( 'refreshOnFocus' ).checked = localStorage[ key ] == 'true';
+               document.getElementById( 'refreshOnFocus' ).addEventListener( 'click', function() {
+                  var checked = document.getElementById( 'refreshOnFocus' ).checked;
+                  localStorage[ key ] = checked;
+               } )
+               window.onfocus = function() {
+                  if( 'true' == localStorage[ key ] ) {
+                     // reload the page when the browser window gets the focus
+                     window.location.reload();
+                  }
+               }
+            }
+            else {
+               document.getElementById( 'refreshOnFocusLabel' ).style.display = 'none';
             }
          };
 
@@ -89,5 +75,7 @@
 </head>
 
 <body>
+
+   <label id="refreshOnFocusLabel">Refresh on focus <input type="checkbox" id="refreshOnFocus"></label>
 </body>
 </html>

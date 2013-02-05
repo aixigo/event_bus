@@ -207,6 +207,9 @@ define( [
       beforeEach( function() {
          inspectorSpy = jasmine.createSpy( 'inspector' );
          eventBus.setInspector( inspectorSpy );
+
+         // set an error handler to prevent from spamming the console from internal error reporting
+         eventBus.setErrorHandler( function() {} );
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -423,15 +426,56 @@ define( [
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      it( 'carries a unique identifier for the current cycle', function() {
-         var mySpy = jasmine.createSpy();
-         eventBus.subscribe( 'myEvent', mySpy );
-         eventBus.publish( 'myEvent' );
-         eventBus.publish( 'myEvent' );
+      describe( 'has a cycleId', function() {
 
-         jasmine.Clock.tick( 1 );
+         var mySpy;
 
-         expect( mySpy.calls[ 0 ].args[ 0 ].cycleId ).not.toEqual( mySpy.calls[ 1 ].args[ 1 ].cycleId );
+         beforeEach( function() {
+            mySpy = jasmine.createSpy();
+
+            eventBus.subscribe( 'myEvent', mySpy );
+            eventBus.publish( 'myEvent' );
+            eventBus.publish( 'myEvent' );
+
+            jasmine.Clock.tick( 1 );
+         } );
+         
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+         
+         it( 'that is counted up on each publish', function() {
+            expect( mySpy.callCount ).toEqual( 2 );
+
+            expect( mySpy.calls[ 0 ].args[ 0 ].cycleId + 1 ).toEqual( mySpy.calls[ 1 ].args[ 0 ].cycleId );
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         describe( 'when triggered during a delivery', function() {
+            var mySpy2;
+            var cycleId;
+
+            beforeEach( function() {
+               mySpy2 = jasmine.createSpy();
+
+               eventBus.subscribe( 'myEvent2', mySpy2 );
+               eventBus.subscribe( 'myEvent1', function( event ) {
+                  cycleId = event.cycleId;
+                  eventBus.publish( 'myEvent2' );
+               } );
+               eventBus.publish( 'myEvent1' );
+
+               jasmine.Clock.tick( 1 );
+            } );
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////
+
+            it( 'it must have the same cycle id as the event it was delivered on', function() {
+               expect( mySpy2.calls[ 0 ].args[ 0 ].cycleId ).toBeDefined();
+               expect( mySpy2.calls[ 0 ].args[ 0 ].cycleId ).toEqual( cycleId );
+            } );
+
+         } );
+         
       } );
 
    } );
@@ -579,6 +623,7 @@ define( [
 
       beforeEach( function() {
          mySpy = jasmine.createSpy();
+         
          eventBus.subscribe( 'doSomethingWrong', function() {
             eventBus.publish( 'willDoSomethingWrong' );
             eventBus.publish( 'didDoSomethingWrong' );
@@ -608,7 +653,7 @@ define( [
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      it( 'throws when the event name doesn\'t end with "Request"', function() {
+      it( 'throws when the event name does not end with "Request"', function() {
          expect( function() {
             eventBus.publishAndGatherReplies( 'wronglyNamedEvent' );
          } ).toThrow();
@@ -692,6 +737,54 @@ define( [
 
          expect( mySpy ).toHaveBeenCalled();
          expect( mySpy.calls[0].args[0].length ).toEqual( 0 );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      describe( 'when a collaborator does not send a did after will within a given timeout', function() {
+
+         var errorHandlerSpy;
+
+         beforeEach( function() {
+            errorHandlerSpy = jasmine.createSpy( 'errorHandlerSpy' );
+            eventBus = eventBusModule.create( {
+               pendingDidTimeout: 1000
+            } );
+            eventBus.setErrorHandler( errorHandlerSpy );
+
+            eventBus.subscribe( 'doSomethingWithTimeoutRequest', function() {
+               eventBus.publish( 'willDoSomethingWithTimeout', { sender: 'sender1' } );
+               eventBus.publish( 'willDoSomethingWithTimeout', { sender: 'sender2' } );
+               setTimeout( function() {
+                  eventBus.publish( 'didDoSomethingWithTimeout', { sender: 'sender1' } );
+               }, 10 );
+            } );
+
+            eventBus.publishAndGatherReplies( 'doSomethingWithTimeoutRequest' ).then( mySpy );
+            jasmine.Clock.tick( 11 );
+         } );
+         
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+         
+         it( 'the promise is still resolved with all results available up to the timeout', function() {
+            expect( mySpy ).not.toHaveBeenCalled();
+
+            jasmine.Clock.tick( 1000 );
+
+            expect( mySpy ).toHaveBeenCalled();
+            expect( mySpy.calls[0].args[0].length ).toEqual( 1 );
+            expect( mySpy.calls[0].args[0][0].sender ).toEqual( 'sender1' );
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'reports the issue to the error handler', function() {
+            jasmine.Clock.tick( 1000 );
+
+            expect( mySpy ).toHaveBeenCalled();
+            expect( errorHandlerSpy ).toHaveBeenCalled();
+         } );
+
       } );
 
    } );

@@ -87,7 +87,8 @@ define( [
       this.subscribers_.push( {
          name: eventName,
          subscriber: subscriber,
-         subscriberName: subscriberName
+         subscriberName: subscriberName,
+         subscriptionWeight: calculateSubscriptionWeight( eventName )
       } );
 
       this.inspector_( {
@@ -326,9 +327,30 @@ define( [
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
    function findSubscribers( self, eventName ) {
-      return _.filter( self.subscribers_, function( subscriberItem ) {
-         return isValidSubscriber( subscriberItem, eventName );
+      var subscribers = [];
+
+      _.each( self.subscribers_, function( subscriberItem ) {
+         if( isValidSubscriber( subscriberItem, eventName ) ) {
+            var weight = subscriberItem.subscriptionWeight;
+            for( var index = 0; index < subscribers.length; ++index ) {
+               var pushedWeight = subscribers[index].subscriptionWeight;
+               if( weight[0] > pushedWeight[0] ) {
+                  subscribers.splice( index, 0, subscriberItem );
+                  return;
+               }
+
+               if( weight[0] === pushedWeight[0] ) {
+                  if( weight[1] > pushedWeight[1] ) {
+                     subscribers.splice( index, 0, subscriberItem );
+                     return;
+                  }
+               }
+            }
+            subscribers.push( subscriberItem );
+         }
       } );
+
+      return subscribers;
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -370,6 +392,20 @@ define( [
       }
 
       return ( eventPart.indexOf( subscribedPart + SUB_PART_SEPARATOR ) === 0 );
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function calculateSubscriptionWeight( eventName ) {
+      var parts = eventName.split( '.' );
+      var weight = [ 0, 0 ];
+      _.each( parts, function( part ) {
+         if( part.length > 0 ) {
+            weight[0]++;
+            weight[1] += part.split( '-' ).length - 1;
+         }
+      } );
+      return weight;
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////

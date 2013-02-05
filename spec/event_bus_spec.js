@@ -108,7 +108,7 @@ define( [
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      it( 'don\'t prevent other subscribers from being called', function() {
+      it( 'do not prevent other subscribers from being called', function() {
 
          eventBus.subscribe( 'myEvent', function() {
             throw new Error( 'this is an error' );
@@ -244,10 +244,10 @@ define( [
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       it( 'that is called every time an event is delivered to a subscriber', function() {
-         eventBus.subscribe( 'someEvent', jasmine.createSpy(), 'subscriber1' );
          eventBus.subscribe( 'someEvent.withSubject', function() {
             throw new Error( 'I have to fail!' );
-         }, 'subscriber2' );
+         }, 'subscriber1' );
+         eventBus.subscribe( 'someEvent', jasmine.createSpy(), 'subscriber2' );
          eventBus.publish( 'someEvent.withSubject', {
             data: {
                some: 'payload'
@@ -258,18 +258,20 @@ define( [
          jasmine.Clock.tick( 1 );
 
          expect( inspectorSpy ).toHaveBeenCalled();
+         // NEEDS FIX C: the following tests are a little bit fragile because they depend on a specific
+         // order of delivered events.
          expect( inspectorSpy.calls[3].args[0].action ).toEqual( 'deliver' );
          expect( inspectorSpy.calls[3].args[0].source ).toEqual( 'publisherX' );
          expect( inspectorSpy.calls[3].args[0].target ).toEqual( 'subscriber1' );
          expect( inspectorSpy.calls[3].args[0].event ).toEqual( 'someEvent.withSubject' );
-         expect( inspectorSpy.calls[3].args[0].subscribedTo ).toEqual( 'someEvent' );
+         expect( inspectorSpy.calls[3].args[0].subscribedTo ).toEqual( 'someEvent.withSubject' );
          expect( inspectorSpy.calls[3].args[0].cycleId ).toEqual( 0 );
 
          expect( inspectorSpy.calls[4].args[0].action ).toEqual( 'deliver' );
          expect( inspectorSpy.calls[4].args[0].source ).toEqual( 'publisherX' );
          expect( inspectorSpy.calls[4].args[0].target ).toEqual( 'subscriber2' );
          expect( inspectorSpy.calls[4].args[0].event ).toEqual( 'someEvent.withSubject' );
-         expect( inspectorSpy.calls[4].args[0].subscribedTo ).toEqual( 'someEvent.withSubject' );
+         expect( inspectorSpy.calls[4].args[0].subscribedTo ).toEqual( 'someEvent' );
          expect( inspectorSpy.calls[4].args[0].cycleId ).toEqual( 0 );
       } );
 
@@ -611,6 +613,51 @@ define( [
          jasmine.Clock.tick( 1 );
 
          expect( mySpy ).toHaveBeenCalled();
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   describe( 'An event bus with different subscribers', function() {
+
+      var calls;
+
+      beforeEach( function() {
+         calls = [];
+         function subscribe( eventName ) {
+            eventBus.subscribe( eventName,function() {
+               calls.push( eventName );
+            } );
+         }
+
+         subscribe( 'topic1.topic2' );
+         subscribe( 'topic1' );
+         subscribe( 'topic1.topic2-sub2.topic3' );
+         subscribe( '' );
+         subscribe( '.topic2' );
+         subscribe( 'topic1.topic2.topic3-sub3' );
+         subscribe( 'topic1-sub1.topic2-sub2' );
+         subscribe( 'topic1-sub1.topic2' );
+         subscribe( 'topic1.topic2.topic3' );
+
+         eventBus.publish( 'topic1-sub1.topic2-sub2.topic3-sub3' );
+         jasmine.Clock.tick( 1 );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'delivers events to the most specific subscribers first', function() {
+         var i = 0;
+         expect( calls[i++] ).toEqual( 'topic1.topic2-sub2.topic3' );
+         expect( calls[i++] ).toEqual( 'topic1.topic2.topic3-sub3' );
+         expect( calls[i++] ).toEqual( 'topic1.topic2.topic3' );
+         expect( calls[i++] ).toEqual( 'topic1-sub1.topic2-sub2' );
+         expect( calls[i++] ).toEqual( 'topic1-sub1.topic2' );
+         expect( calls[i++] ).toEqual( 'topic1.topic2' );
+         expect( calls[i++] ).toEqual( 'topic1' );
+         expect( calls[i++] ).toEqual( '.topic2' );
+         expect( calls[i++] ).toEqual( '' );
       } );
 
    } );

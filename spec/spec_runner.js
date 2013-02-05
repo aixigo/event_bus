@@ -12,6 +12,7 @@
 //  http://www.aixigo.de
 //  Aachen, Germany
 //
+window.specTitle = 'EventBus Specification';
 window.tests = [ 'lib/event_bus/spec/event_bus_spec' ];
 
 // Configure require js for this specific module. It is recommended to place this file within a sub

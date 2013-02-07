@@ -2,7 +2,7 @@
       "http://www.w3.org/TR/html4/loose.dtd">
 <html>
 <head>
-   <title>Jasmine Spec Runner</title>
+   <title></title>
 
    <script type="text/javascript">
       (function() {
@@ -10,77 +10,69 @@
 
          document.writeln( '<link rel="stylesheet" type="text/css" href="' + prefix + '/tools/source/jasmine/jasmine.css"></link>' );
 
-         var prerequisites = [ '/tools/source/jasmine/jasmine.js', '/tools/source/jasmine/jasmine-html.js', '/includes/lib/requirejs/require.js' ];
+         var prerequisites = [
+            '/tools/source/jasmine/jasmine.js',
+            '/tools/source/jasmine/jasmine-html.js',
+            '/includes/lib/requirejs/require.js'
+         ];
+
          for( var i = 0; i < prerequisites.length; ++i ) {
             document.writeln( '<script type="text/javascript" src="' + prefix + prerequisites[ i ] + '"><' + '/script>' );
          };
       })();
    </script>
 
-   <script type="text/javascript">
-      (function() {
-
-         // BEGIN: Inserted for specific module
-
-         // List the tests you want to execute relative to this file combined with the baseUrl configured for
-         // require js below.
-         window.tests = [ 'lib/event_bus/spec/event_bus_spec' ];
-
-         // Configure require js for this specific module. It is recommended to place this file within a sub
-         // folder called 'spec' within the module. Hence the baseUrl should point one folder up to the
-         // main folder of this module (most probably '../').
-         // Optionally it is necessary to configure the paths to all modules required by the module under test.
-         require.config({
-            baseUrl: '../../../',
-            shim: {
-               'lib/underscore/underscore': {
-                  exports: '_',
-                  init: function() {
-                     return this._.noConflict();
-                  }
-               }
-            }
-         });
-
-         // END: Inserted for specific module
-
-      })();
-   </script>
+   <script type="text/javascript" src="spec_runner.js"></script>
 
    <script type="text/javascript">
       (function() {
 
          var jasmineEnv = jasmine.getEnv();
-         jasmineEnv.updateInterval = 1000;
-
          var htmlReporter = new jasmine.HtmlReporter();
 
          jasmineEnv.addReporter( htmlReporter );
-
          jasmineEnv.specFilter = function( spec ) {
             return htmlReporter.specFilter( spec );
          };
 
-         var currentWindowOnload = window.onload;
+         if( window.specTitle ) {
+            document.title = window.specTitle;
+         }
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
 
          window.onload = function() {
-            if( currentWindowOnload ) {
-               currentWindowOnload();
-            }
+            require( window.tests, function() {
+               jasmineEnv.execute();
+            } );
 
-            require( window.tests, execJasmine );
-
-            // only chrome can handle focus events and reload the window reasonable
             if( navigator.userAgent.indexOf( 'Chrome/' ) !== -1 ) {
-               window.onfocus = function() {
-                  // reload the page when the browser window gets the focus
-                  window.location.reload();
-               }
+               // only chrome can handle focus events and reload the window reasonable
+               initReloadOnFocus();
+            }
+            else {
+               document.getElementById( 'refreshOnFocusLabel' ).style.display = 'none';
             }
          };
 
-         function execJasmine() {
-            jasmineEnv.execute();
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         function initReloadOnFocus() {
+            var key = 'specRunnerRefreshOnFocus';
+            if( !( key in localStorage ) ) {
+               localStorage[ key ] = true;
+            }
+            document.getElementById( 'refreshOnFocus' ).checked = localStorage[ key ] == 'true';
+            document.getElementById( 'refreshOnFocus' ).addEventListener( 'click', function() {
+               var checked = document.getElementById( 'refreshOnFocus' ).checked;
+               localStorage[ key ] = checked;
+            } )
+
+            window.onfocus = function() {
+               if( 'true' == localStorage[ key ] ) {
+                  window.location.reload();
+               }
+            }
          }
 
       })();
@@ -89,5 +81,6 @@
 </head>
 
 <body>
+   <label id="refreshOnFocusLabel">Refresh on focus <input type="checkbox" id="refreshOnFocus"></label>
 </body>
 </html>

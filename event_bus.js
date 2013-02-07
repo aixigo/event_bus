@@ -20,9 +20,8 @@
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 define( [
-   'lib/underscore/underscore',
-   'lib/utilities/object'
-], function( _, objUtils ) {
+   'lib/underscore/underscore'
+], function( _ ) {
    'use strict';
 
    var Q_;
@@ -34,7 +33,11 @@ define( [
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function EventBus() {
+   function EventBus( optionalConfiguration ) {
+      this.config_ = _.defaults( optionalConfiguration || {}, {
+         pendingDidTimeout: 3000
+      } );
+
       this.cycleCounter_ = 0;
       this.eventQueue_ = [];
       this.subscribers_ = [];
@@ -84,7 +87,8 @@ define( [
       this.subscribers_.push( {
          name: eventName,
          subscriber: subscriber,
-         subscriberName: subscriberName
+         subscriberName: subscriberName,
+         subscriptionWeight: calculateSubscriptionWeight( eventName )
       } );
 
       this.inspector_( {
@@ -93,6 +97,37 @@ define( [
          target: '-',
          event: eventName,
          cycleId: this.currentCycle_
+      } );
+   };
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   /**
+    * Unsubscribes a subscriber from all subscribed events.
+    *
+    * NEEDS FIX B: Currently this only removes the subscriber for future events but ignores queued events
+    *
+    * @param {Function} subscriber the function to unsubscribe
+    */
+   EventBus.prototype.unsubscribe = function( subscriber ) {
+      if( !_.isFunction( subscriber ) ) {
+         throw new Error( 'Expected listener to be a function but got ' + subscriber );
+      }
+
+      var self = this;
+      this.subscribers_ = _.filter( this.subscribers_, function( subscriberItem ) {
+         if( subscriberItem.subscriber !== subscriber ) {
+            return true;
+         }
+
+         self.inspector_( {
+            action: 'unsubscribe',
+            source: subscriberItem.subscriberName,
+            target: '-',
+            event: subscriberItem.name,
+            cycleId: self.currentCycle_
+         } );
+         return false;
       } );
    };
 
@@ -146,12 +181,13 @@ define( [
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
-
       var matches = REQUEST_MATCHER.exec( eventName );
       if( !matches ) {
          throw new Error( 'Expected eventName to end with "Request" but got ' + eventName );
       }
 
+      var self = this;
+      var sender = optionalEvent ? optionalEvent.sender : undefined;
       var eventNameSuffix = matches[1].toUpperCase() + matches[2];
       if( matches[ 3 ] ) {
          eventNameSuffix += matches[ 3 ];
@@ -163,17 +199,17 @@ define( [
 
       function willCollector( event ) {
          if( typeof event.sender !== 'string' ) {
-            throw new Error( 'A resopnse with will to a request-event must contain a sender.' );
+            throw new Error( 'A response with will to a request-event must contain a sender.' );
          }
 
          willWaitingForDid.push( event.sender );
       }
-      this.subscribe( 'will' + eventNameSuffix, willCollector, optionalEvent ? optionalEvent.sender : undefined );
+      this.subscribe( 'will' + eventNameSuffix, willCollector, sender );
 
       function didCollector( event ) {
          givenDidResponses.push( event );
 
-         var senderIndex = willWaitingForDid.indexOf( event.sender );
+         var senderIndex = _.indexOf( willWaitingForDid, event.sender );
          if( senderIndex !== -1 ) {
             willWaitingForDid.splice( senderIndex, 1 );
          }
@@ -182,7 +218,17 @@ define( [
             finish();
          }
       }
-      this.subscribe( 'did' + eventNameSuffix, didCollector, optionalEvent ? optionalEvent.sender : undefined );
+      this.subscribe( 'did' + eventNameSuffix, didCollector, sender );
+
+      var timeoutRef = setTimeout( function() {
+         if( willWaitingForDid.length > 0 ) {
+            var message = 'Timeout while waiting for pending did' + eventNameSuffix + ' on ' + eventName +
+               ' from ' + sender + ' after ' + self.config_.pendingDidTimeout + 'ms.\n' +
+               '  Response missing from: ' + willWaitingForDid.join( ', ' ) + '.';
+            self.errorHandler_( message );
+            finish();
+         }
+      }, this.config_.pendingDidTimeout );
 
       this.publish( eventName, optionalEvent ).then( function() {
          if( willWaitingForDid.length === 0 ) {
@@ -193,45 +239,14 @@ define( [
          cycleFinished = true;
       } );
 
-      var self = this;
       function finish() {
+         clearTimeout( timeoutRef );
          self.unsubscribe( willCollector );
          self.unsubscribe( didCollector );
          deferred.resolve( givenDidResponses );
       }
 
       return deferred.promise;
-   };
-
-   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-   /**
-    * Unsubscribes a subscriber from all subscribed events.
-    *
-    * NEEDS FIX B: Currently this only removes the subscriber for future events but ignores queued events
-    *
-    * @param {Function} subscriber the function to unsubscribe
-    */
-   EventBus.prototype.unsubscribe = function( subscriber ) {
-      if( !_.isFunction( subscriber ) ) {
-         throw new Error( 'Expected listener to be a function but got ' + subscriber );
-      }
-
-      var self = this;
-      this.subscribers_ = _.filter( this.subscribers_, function( subscriberItem ) {
-         if( subscriberItem.subscriber !== subscriber ) {
-            return true;
-         }
-
-         self.inspector_( {
-            action: 'unsubscribe',
-            source: subscriberItem.subscriberName,
-            target: '-',
-            event: subscriberItem.name,
-            cycleId: self.currentCycle_
-         } );
-         return false;
-      } );
    };
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -278,7 +293,9 @@ define( [
 
             }
             catch( e ) {
-               self.errorHandler_( e, eventItem, subscriberItem );
+               var message = 'error while calling subscriber for event ' + eventItem.name +
+                  ' (subscribed to: ' + subscriberItem.name + ')';
+               self.errorHandler_( message, e );
             }
          } );
 
@@ -310,9 +327,30 @@ define( [
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
    function findSubscribers( self, eventName ) {
-      return _.filter( self.subscribers_, function( subscriberItem ) {
-         return isValidSubscriber( subscriberItem, eventName );
+      var subscribers = [];
+
+      _.each( self.subscribers_, function( subscriberItem ) {
+         if( isValidSubscriber( subscriberItem, eventName ) ) {
+            var weight = subscriberItem.subscriptionWeight;
+            for( var index = 0; index < subscribers.length; ++index ) {
+               var pushedWeight = subscribers[index].subscriptionWeight;
+               if( weight[0] > pushedWeight[0] ) {
+                  subscribers.splice( index, 0, subscriberItem );
+                  return;
+               }
+
+               if( weight[0] === pushedWeight[0] ) {
+                  if( weight[1] > pushedWeight[1] ) {
+                     subscribers.splice( index, 0, subscriberItem );
+                     return;
+                  }
+               }
+            }
+            subscribers.push( subscriberItem );
+         }
       } );
+
+      return subscribers;
    }
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -358,18 +396,33 @@ define( [
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function defaultErrorHandler( error, eventItem, subscriberItem ) {
+   function calculateSubscriptionWeight( eventName ) {
+      var parts = eventName.split( '.' );
+      var weight = [ 0, 0 ];
+      _.each( parts, function( part ) {
+         if( part.length > 0 ) {
+            weight[0]++;
+            weight[1] += part.split( '-' ).length - 1;
+         }
+      } );
+      return weight;
+   }
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+   function defaultErrorHandler( message, optionalException ) {
       /*global console*/
       if( !console || !_.isFunction( console.log ) ) {
          return;
       }
 
       var errFunc = _.isFunction( console.error ) ? 'error' : 'log';
-      console[ errFunc ]( 'error while calling subscriber for event ' + eventItem.name +
-         ' (subscribed to: ' + subscriberItem.name + ')' );
-      console.log( error.message );
-      if( error.stack ) {
-         console.log( error.stack );
+      console[ errFunc ]( message );
+      if( optionalException ) {
+         console.log( optionalException.message );
+         if( optionalException.stack ) {
+            console.log( optionalException.stack );
+         }
       }
    }
 
@@ -387,7 +440,7 @@ define( [
 
    return {
 
-      create: function() {
+      create: function( optionalConfiguration ) {
          if( !Q_ ) {
             throw new Error( 'Need a promise implementation like $q or Q' );
          }
@@ -395,7 +448,7 @@ define( [
             throw new Error( 'Need a next tick implementation like $timeout' );
          }
 
-         return new EventBus();
+         return new EventBus( optionalConfiguration );
       },
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////

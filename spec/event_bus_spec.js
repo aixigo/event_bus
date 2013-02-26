@@ -237,7 +237,7 @@ define( [
          expect( inspectorSpy.calls[0].args[0].action ).toEqual( 'publish' );
          expect( inspectorSpy.calls[0].args[0].source ).toEqual( 'publisherX' );
          expect( inspectorSpy.calls[0].args[0].event ).toEqual( 'someEvent' );
-         expect( inspectorSpy.calls[0].args[0].data ).toEqual( { some: 'payload' } );
+         expect( inspectorSpy.calls[0].args[0].eventObject.data ).toEqual( { some: 'payload' } );
          expect( inspectorSpy.calls[0].args[0].cycleId ).toEqual( 0 );
       } );
 

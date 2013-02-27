@@ -161,7 +161,7 @@ define( [
          source: eventItem.sender,
          target: '-',
          event: eventName,
-         data: eventItem.data,
+         eventObject: eventItem,
          cycleId: eventItem.cycleId
       } );
 

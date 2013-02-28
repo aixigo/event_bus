@@ -406,8 +406,8 @@ define( [
 
          eventBus.publish( 'myEvent', {
             data: {
-               'myNumber': 12,
-               'myString': 'Hello'
+               myNumber: 12,
+               myString: 'Hello'
             }
          } );
 
@@ -424,6 +424,38 @@ define( [
          eventBus.publish( 'myEvent' );
 
          jasmine.Clock.tick( 1 );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should be deeply cloned for each delivery', function() {
+         eventBus.subscribe( 'myEvent', function( event ) {
+            event.data.x = 42;
+         } );
+         eventBus.subscribe( 'myEvent', function( event ) {
+            expect( event.data.x ).toEqual( 12 );
+         } );
+
+         eventBus.publish( 'myEvent', {
+            data: {
+               x: 12
+            }
+         } );
+      } );
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      it( 'should be deeply cloned on publish', function() {
+         eventBus.subscribe( 'myEvent', function( event ) {
+            expect( event.data.x ).toEqual( 12 );
+         } );
+         var event = {
+            data: {
+               x: 12
+            }
+         };
+         eventBus.publish( 'myEvent', event );
+         event.data.x = 42;
       } );
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////

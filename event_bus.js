@@ -20,8 +20,9 @@
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 define( [
-   'lib/underscore/underscore'
-], function( _ ) {
+   'lib/underscore/underscore',
+   'lib/utilities/object'
+], function( _, objectUtils ) {
    'use strict';
 
    var Q_;
@@ -145,7 +146,7 @@ define( [
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
 
-      var item = _.isObject( optionalEvent ) ? _.clone( optionalEvent ) : {};
+      var item = _.isObject( optionalEvent ) ? objectUtils.deepClone( optionalEvent ) : {};
       var eventItem = _.defaults( item, {
             data: {},
             cycleId: this.currentCycle_ > -1 ? this.currentCycle_ : this.cycleCounter_++,
@@ -285,7 +286,7 @@ define( [
             } );
 
             try {
-               subscriberItem.subscriber( eventItem, {
+               subscriberItem.subscriber( objectUtils.deepClone( eventItem ), {
                   unsubscribe: function() {
                      self.unsubscribe( subscriberItem.subscriber );
                   }

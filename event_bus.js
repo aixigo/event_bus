@@ -296,7 +296,7 @@ define( [
             catch( e ) {
                var message = 'error while calling subscriber for event ' + eventItem.name +
                   ' (subscribed to: ' + subscriberItem.name + ')';
-               self.errorHandler_( message, e );
+               self.errorHandler_( message, { 'Exception': e, 'Published event': eventItem } );
             }
          } );
 
@@ -411,7 +411,7 @@ define( [
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   function defaultErrorHandler( message, optionalException ) {
+   function defaultErrorHandler( message, optionalErrorInformation ) {
       /*global console*/
       if( !console || !_.isFunction( console.log ) ) {
          return;
@@ -419,11 +419,8 @@ define( [
 
       var errFunc = _.isFunction( console.error ) ? 'error' : 'log';
       console[ errFunc ]( message );
-      if( optionalException ) {
-         console.log( optionalException.message );
-         if( optionalException.stack ) {
-            console.log( optionalException.stack );
-         }
+      if( optionalErrorInformation ) {
+         console.log( optionalErrorInformation );
       }
    }
 

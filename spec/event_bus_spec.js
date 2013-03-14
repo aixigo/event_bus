@@ -35,7 +35,7 @@ define( [
       Q = portalMocks.mockQ();
       nextTick = portalMocks.mockTick();
 
-      eventBusModule.init( Q, nextTick );
+      eventBusModule.init( Q, nextTick, nextTick );
       eventBus = eventBusModule.create();
    } );
 

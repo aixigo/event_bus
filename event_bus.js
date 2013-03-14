@@ -27,6 +27,7 @@ define( [
 
    var Q_;
    var nextTick_;
+   var timeoutFunction_;
 
    var PART_SEPARATOR = '.';
    var SUB_PART_SEPARATOR = '-';
@@ -221,7 +222,7 @@ define( [
       }
       this.subscribe( 'did' + eventNameSuffix, didCollector, sender );
 
-      var timeoutRef = setTimeout( function() {
+      var timeoutRef = timeoutFunction_( function() {
          if( willWaitingForDid.length > 0 ) {
             var message = 'Timeout while waiting for pending did' + eventNameSuffix + ' on ' + eventName +
                ' from ' + sender + ' after ' + self.config_.pendingDidTimeout + 'ms.\n' +
@@ -451,9 +452,10 @@ define( [
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      init: function( Q, nextTick ) {
+      init: function( Q, nextTick, timeoutFunction ) {
          Q_ = Q;
          nextTick_ = nextTick;
+         timeoutFunction_ = timeoutFunction;
       }
 
    };

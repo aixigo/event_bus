@@ -37,7 +37,7 @@ define( [
 
    function EventBus( optionalConfiguration ) {
       this.config_ = _.defaults( optionalConfiguration || {}, {
-         pendingDidTimeout: 3000
+         pendingDidTimeout: 20000
       } );
 
       this.cycleCounter_ = 0;

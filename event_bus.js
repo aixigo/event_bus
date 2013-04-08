@@ -420,8 +420,14 @@ define( [
 
       var errFunc = _.isFunction( console.error ) ? 'error' : 'log';
       console[ errFunc ]( message );
+
       if( optionalErrorInformation ) {
-         console.log( optionalErrorInformation );
+         _.each( optionalErrorInformation, function( info, title ) {
+            console.log( '   - [0]: [1]', title, info );
+            if( info instanceof Error && info.stack ) {
+               console.log( '   - Stacktrace: [1]', info.stack );
+            }
+         } );
       }
    }
 

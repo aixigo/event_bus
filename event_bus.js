@@ -149,7 +149,6 @@ define( [
 
       var item = _.isObject( optionalEvent ) ? objectUtils.deepClone( optionalEvent ) : {};
       var eventItem = _.defaults( item, {
-            data: {},
             cycleId: this.currentCycle_ > -1 ? this.currentCycle_ : this.cycleCounter_++,
             sender: null,
             initiator: null

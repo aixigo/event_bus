@@ -416,18 +416,6 @@ define( [
 
       ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      it( 'should at least contain an empty object if no data was published', function() {
-         eventBus.subscribe( 'myEvent', function( event ) {
-            expect( typeof event.data ).toBe( 'object' );
-         } );
-
-         eventBus.publish( 'myEvent' );
-
-         jasmine.Clock.tick( 1 );
-      } );
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
       it( 'should be deeply cloned for each delivery', function() {
          eventBus.subscribe( 'myEvent', function( event ) {
             event.data.x = 42;

@@ -140,19 +140,24 @@ define( [
     *
     * @param {String} eventName the name of the event to publish
     * @param {Object=} optionalEvent the event to publish
+    * @param {Object=} optionalOptions additional options for the publish action
     * @return {Promise}
     */
-   EventBus.prototype.publish = function publish( eventName, optionalEvent ) {
+   EventBus.prototype.publish = function publish( eventName, optionalEvent, optionalOptions ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
 
+      var options = _.defaults( optionalOptions || {}, {
+         deliverToSender: true
+      } );
       var item = _.isObject( optionalEvent ) ? objectUtils.deepClone( optionalEvent ) : {};
       var eventItem = _.defaults( item, {
-            cycleId: this.currentCycle_ > -1 ? this.currentCycle_ : this.cycleCounter_++,
-            sender: null,
-            initiator: null
-         } );
+         cycleId: this.currentCycle_ > -1 ? this.currentCycle_ : this.cycleCounter_++,
+         sender: null,
+         initiator: null
+      } );
+      eventItem.options = options;
       eventItem.publishedDeferred = Q_.defer(),
       eventItem.name = eventName;
       enqueueEvent( this, eventItem );
@@ -178,7 +183,7 @@ define( [
     * @param {Object=} optionalEvent the event to publish
     * @return {Promise}
     */
-   EventBus.prototype.publishAndGatherReplies = function publishAndGatherReplies( eventName, optionalEvent ) {
+   EventBus.prototype.publishAndGatherReplies = function publishAndGatherReplies( eventName, optionalEvent, optionalOptions ) {
       if( !_.isString( eventName ) ) {
          throw new Error( 'Expected eventName to be a String but got ' + eventName );
       }
@@ -190,8 +195,8 @@ define( [
       var self = this;
       var sender = optionalEvent ? optionalEvent.sender : undefined;
       var eventNameSuffix = matches[1].toUpperCase() + matches[2];
-      if( matches[ 3 ] ) {
-         eventNameSuffix += matches[ 3 ];
+      if( matches[3] ) {
+         eventNameSuffix += matches[3];
       }
       var deferred = Q_.defer();
       var willWaitingForDid = [];
@@ -231,7 +236,7 @@ define( [
          }
       }, this.config_.pendingDidTimeout );
 
-      this.publish( eventName, optionalEvent ).then( function() {
+      this.publish( eventName, optionalEvent, optionalOptions ).then( function() {
          if( willWaitingForDid.length === 0 ) {
             // either there was no will or all did reponses were already given in the same cycle as the will
             return finish();
@@ -276,10 +281,16 @@ define( [
          delete eventItem.publishedDeferred;
 
          _.each( findSubscribers( self, eventItem.name ), function( subscriberItem ) {
+            var senderName = eventItem.sender;
+            var subscriberName = subscriberItem.subscriberName;
+            if( !eventItem.options.deliverToSender && senderName && senderName === subscriberName ) {
+               return;
+            }
+
             self.inspector_( {
                action: 'deliver',
-               source: eventItem.sender,
-               target: subscriberItem.subscriberName,
+               source: senderName,
+               target: subscriberName,
                event: eventItem.name,
                subscribedTo: subscriberItem.name,
                cycleId: eventItem.cycleId

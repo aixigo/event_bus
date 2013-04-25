@@ -84,6 +84,67 @@ define( [
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+   describe( 'EventBus publish when called with options', function() {
+
+      describe( 'with option "deliverToSender"', function() {
+
+         var senderSpy;
+         var otherSpy;
+
+         beforeEach( function() {
+            senderSpy = jasmine.createSpy( 'senderSpy' );
+            otherSpy = jasmine.createSpy( 'otherSpy' );
+
+            eventBus.subscribe( 'messageRequest', senderSpy, 'leSender' );
+            eventBus.subscribe( 'messageRequest', otherSpy, 'leOtherGuy' );
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'delivers the message to the sender when set to true', function() {
+            eventBus.publish( 'messageRequest', { sender: 'leSender' }, { deliverToSender: true } );
+            jasmine.Clock.tick( 0 );
+
+            expect( senderSpy ).toHaveBeenCalled();
+            expect( otherSpy ).toHaveBeenCalled();
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'delivers the message to the sender by default', function() {
+            eventBus.publish( 'messageRequest', { sender: 'leSender' } );
+            jasmine.Clock.tick( 0 );
+
+            expect( senderSpy ).toHaveBeenCalled();
+            expect( otherSpy ).toHaveBeenCalled();
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'doesn\'t send the message to the sender when set to false', function() {
+            eventBus.publish( 'messageRequest', { sender: 'leSender' }, { deliverToSender: false } );
+            jasmine.Clock.tick( 0 );
+
+            expect( senderSpy ).not.toHaveBeenCalled();
+            expect( otherSpy ).toHaveBeenCalled();
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'doesn\'t send the message to the sender when set to false for publishAndGatherReplies', function() {
+            eventBus.publishAndGatherReplies( 'messageRequest', { sender: 'leSender' }, { deliverToSender: false } );
+            jasmine.Clock.tick( 0 );
+
+            expect( senderSpy ).not.toHaveBeenCalled();
+            expect( otherSpy ).toHaveBeenCalled();
+         } );
+
+      } );
+
+   } );
+
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
    describe( 'Errors when calling subscribers', function() {
 
       var errorHandlerSpy;
@@ -154,7 +215,8 @@ define( [
                name: 'myEvent.2',
                data: {
                   key: 'val'
-               }
+               },
+               options: {}
             } ] );
          } );
          eventBus.subscribe( 'myEvent.2', mySpy );
@@ -410,18 +472,6 @@ define( [
                myString: 'Hello'
             }
          } );
-
-         jasmine.Clock.tick( 1 );
-      } );
-
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      it( 'should at least contain an empty object if no data was published', function() {
-         eventBus.subscribe( 'myEvent', function( event ) {
-            expect( typeof event.data ).toBe( 'object' );
-         } );
-
-         eventBus.publish( 'myEvent' );
 
          jasmine.Clock.tick( 1 );
       } );

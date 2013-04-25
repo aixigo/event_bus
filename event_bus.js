@@ -307,7 +307,11 @@ define( [
             catch( e ) {
                var message = 'error while calling subscriber for event ' + eventItem.name +
                   ' (subscribed to: ' + subscriberItem.name + ')';
-               self.errorHandler_( message, { 'Exception': e, 'Published event': eventItem } );
+               self.errorHandler_( message, {
+                  'Exception': e,
+                  'Published event': eventItem,
+                  'Caused by Subscriber': subscriberItem
+               } );
             }
          } );
 

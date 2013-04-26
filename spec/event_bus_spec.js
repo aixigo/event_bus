@@ -183,6 +183,48 @@ define( [
          expect( mySpy ).toHaveBeenCalled();
       } );
 
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      describe( 'providing a set of useful information that', function() {
+
+         var errorInformation;
+
+         beforeEach( function() {
+            eventBus.subscribe( 'myEvent', function() { throw new Error( 'this is an error' ); }, 'meThrowsError' );
+            eventBus.publish( 'myEvent', { sender: 'itsMe!' } );
+            jasmine.Clock.tick( 0 );
+
+            errorInformation = errorHandlerSpy.calls[0].args;
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'contains a human readable error message', function() {
+            expect( errorInformation[0] ).toEqual( 'error while calling subscriber for event myEvent (subscribed to: myEvent)' );
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'contains the exception that was thrown by the subscriber', function() {
+            expect( errorInformation[1].Exception.message ).toEqual( 'this is an error' );
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'contains the original event item', function() {
+            expect( errorInformation[1]['Published event'].name ).toEqual( 'myEvent' );
+            expect( errorInformation[1]['Published event'].sender ).toEqual( 'itsMe!' );
+         } );
+
+         /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+         it( 'contains the information about the subscriber that threw the error', function() {
+            expect( errorInformation[1]['Caused by Subscriber'].subscriberName ).toEqual( 'meThrowsError' );
+            expect( errorInformation[1]['Caused by Subscriber'].name ).toEqual( 'myEvent' );
+         } );
+
+      } );
+
    } );
 
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
